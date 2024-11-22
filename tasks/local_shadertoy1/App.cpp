@@ -134,7 +134,7 @@ void App::drawFrame()
         currentCmdBuf,
         backbuffer,
         // We are going to use the texture at the transfer stage...
-        vk::PipelineStageFlagBits2::eTransfer, 
+        vk::PipelineStageFlagBits2::eTransfer,
         // ...to transfer-write stuff into it...
         vk::AccessFlagBits2::eTransferWrite,
         // ...and want it to have the appropriate layout.
@@ -153,15 +153,15 @@ void App::drawFrame()
       // At the end of "rendering", we are required to change how the pixels of the
       // swpchain image are laid out in memory to something that is appropriate
       // for presenting to the window (while preserving the content of the pixels!).
-      etna::set_state(
-        currentCmdBuf,
-        ImageToy.get(),
-        // This looks weird, but is correct. Ask about it later.
-        vk::PipelineStageFlagBits2::eComputeShader,
-        vk::AccessFlagBits2::eShaderWrite,
-        vk::ImageLayout::eGeneral, //eTransferSrcOptimal
-        vk::ImageAspectFlagBits::eColor);
-      etna::flush_barriers(currentCmdBuf);
+      // etna::set_state(
+      //   currentCmdBuf,
+      //   ImageToy.get(),
+      //   // This looks weird, but is correct. Ask about it later.
+      //   vk::PipelineStageFlagBits2::eComputeShader,
+      //   vk::AccessFlagBits2::eShaderWrite,
+      //   vk::ImageLayout::eGeneral, //eTransferSrcOptimal
+      //   vk::ImageAspectFlagBits::eColor);
+
 
       auto set = etna::create_descriptor_set(
         etna::get_shader_program("local_shadertoy1").getDescriptorLayoutId(0),
@@ -178,6 +178,7 @@ void App::drawFrame()
       uint32_t groupCountX = (resolution.x + 31) / 32;
       uint32_t groupCountY = (resolution.y + 31) / 32;
 
+      etna::flush_barriers(currentCmdBuf);
       currentCmdBuf.dispatch(groupCountX, groupCountY, 1);
 
       vk::ImageBlit blitRegion{
@@ -192,7 +193,7 @@ void App::drawFrame()
       };
 
       currentCmdBuf.blitImage(
-          ImageToy.get(), vk::ImageLayout::eTransferSrcOptimal,
+          ImageToy.get(), vk::ImageLayout::eGeneral,
           backbuffer, vk::ImageLayout::eTransferDstOptimal,
           blitRegion, vk::Filter::eNearest
       );
@@ -201,7 +202,8 @@ void App::drawFrame()
         currentCmdBuf,
         backbuffer,
         vk::PipelineStageFlagBits2::eTransfer,
-        {},
+        {}, 
+        // vk::AccessFlagBits2::eShaderWrite,
         vk::ImageLayout::ePresentSrcKHR,
         vk::ImageAspectFlagBits::eColor);
 
