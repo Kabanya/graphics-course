@@ -145,7 +145,6 @@ void App::drawFrame()
       // As with set_state, Etna sometimes flushes on it's own.
       // Usually, flushes should be placed before "action", i.e. compute dispatches
       // and blit/copy operations.
-      etna::flush_barriers(currentCmdBuf);
 
 
       // TODO: Record your commands here!
@@ -153,15 +152,15 @@ void App::drawFrame()
       // At the end of "rendering", we are required to change how the pixels of the
       // swpchain image are laid out in memory to something that is appropriate
       // for presenting to the window (while preserving the content of the pixels!).
-      // etna::set_state(
-      //   currentCmdBuf,
-      //   ImageToy.get(),
-      //   // This looks weird, but is correct. Ask about it later.
-      //   vk::PipelineStageFlagBits2::eComputeShader,
-      //   vk::AccessFlagBits2::eShaderWrite,
-      //   vk::ImageLayout::eGeneral, //eTransferSrcOptimal
-      //   vk::ImageAspectFlagBits::eColor);
+      etna::set_state(
+        currentCmdBuf,
+        ImageToy.get(),
+        vk::PipelineStageFlagBits2::eComputeShader,
+        vk::AccessFlagBits2::eShaderWrite,
+        vk::ImageLayout::eGeneral, //eTransferSrcOptimal
+        vk::ImageAspectFlagBits::eColor);
 
+      etna::flush_barriers(currentCmdBuf);
 
       auto set = etna::create_descriptor_set(
         etna::get_shader_program("local_shadertoy1").getDescriptorLayoutId(0),
@@ -178,8 +177,17 @@ void App::drawFrame()
       uint32_t groupCountX = (resolution.x + 31) / 32;
       uint32_t groupCountY = (resolution.y + 31) / 32;
 
-      etna::flush_barriers(currentCmdBuf);
       currentCmdBuf.dispatch(groupCountX, groupCountY, 1);
+
+        etna::set_state(
+        currentCmdBuf,
+        ImageToy.get(),
+        vk::PipelineStageFlagBits2::eTransfer,
+        vk::AccessFlagBits2::eTransferRead,
+        vk::ImageLayout::eTransferSrcOptimal,
+        vk::ImageAspectFlagBits::eColor);
+
+      etna::flush_barriers(currentCmdBuf);
 
       vk::ImageBlit blitRegion{
           .srcSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
@@ -193,7 +201,7 @@ void App::drawFrame()
       };
 
       currentCmdBuf.blitImage(
-          ImageToy.get(), vk::ImageLayout::eGeneral,
+          ImageToy.get(), vk::ImageLayout::eTransferSrcOptimal,
           backbuffer, vk::ImageLayout::eTransferDstOptimal,
           blitRegion, vk::Filter::eNearest
       );
@@ -201,9 +209,8 @@ void App::drawFrame()
       etna::set_state(
         currentCmdBuf,
         backbuffer,
-        vk::PipelineStageFlagBits2::eTransfer,
+        vk::PipelineStageFlagBits2::eColorAttachmentOutput,
         {}, 
-        // vk::AccessFlagBits2::eShaderWrite,
         vk::ImageLayout::ePresentSrcKHR,
         vk::ImageAspectFlagBits::eColor);
 
