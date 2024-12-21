@@ -45,10 +45,10 @@ App::App()
       .vsync = useVsync,
     });
 
-    resolution = {w, h};
-  }
+    resolution = {w, h};  }  commandManager = etna::get_context().createPerFrameCmdMgr();
 
-  commandManager = etna::get_context().createPerFrameCmdMgr();
+
+
   
   context = &etna::get_context();
 
@@ -149,6 +149,8 @@ void App::run()
 void App::drawFrame()
 {
   auto currentCmdBuf = commandManager->acquireNext();
+  
+  ETNA_PROFILE_GPU(currentCmdBuf, "Start of drawFrame()");
 
   etna::begin_frame();
 
@@ -160,7 +162,6 @@ void App::drawFrame()
 
     ETNA_CHECK_VK_RESULT(currentCmdBuf.begin(vk::CommandBufferBeginInfo{}));
     {
-      ETNA_PROFILE_GPU(currentCmdBuf, renderFrameInflight);
 
       etna::set_state(
         currentCmdBuf,
@@ -173,6 +174,8 @@ void App::drawFrame()
       etna::flush_barriers(currentCmdBuf);
 
     {
+      ETNA_PROFILE_GPU(currentCmdBuf, "Genering texture");
+
       etna::set_state(
         currentCmdBuf,
         TextureComputed.get(),
@@ -196,10 +199,13 @@ void App::drawFrame()
 
       uint32_t groupCountX = (resolution.x + 31) / 32;
       uint32_t groupCountY = (resolution.y + 31) / 32;
-
+     
       currentCmdBuf.dispatch(groupCountX, groupCountY, 1);
+
     }
+
       {
+        ETNA_PROFILE_GPU(currentCmdBuf, "Finished Generating texture");
         etna::set_state(
           currentCmdBuf,
           TextureComputed.get(),
@@ -221,10 +227,8 @@ void App::drawFrame()
           .image = backbuffer,
           .view = backbufferView
         }},
-          {}
-        };
-
-        auto set = etna::create_descriptor_set(
+          {}        }; 
+          auto set = etna::create_descriptor_set(
           etna::get_shader_program("graphics").getDescriptorLayoutId(0),
           currentCmdBuf,
           {
@@ -237,8 +241,12 @@ void App::drawFrame()
         currentCmdBuf.bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipeline.getVkPipeline());
         currentCmdBuf.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, graphicsPipeline.getVkPipelineLayout(), 0, 1, &vkSet, 0, nullptr);
 
+        // ETNA_PROFILE_GPU(currentCmdBuf, "Main Frame");
+
         currentCmdBuf.draw(3, 1, 0, 0);
       }
+
+      ETNA_PROFILE_GPU(currentCmdBuf, "End of Frame");
 
       etna::set_state(
         currentCmdBuf,
