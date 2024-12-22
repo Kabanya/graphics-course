@@ -9,6 +9,9 @@
 
 #include "wsi/OsWindowingManager.hpp"
 
+#include <etna/GraphicsPipeline.hpp>
+#include <etna/Sampler.hpp>
+
 
 class App
 {
@@ -27,7 +30,10 @@ private:
 
   etna::GlobalContext* context;
   etna::ComputePipeline pipelineToy;
-  etna::Image ImageToy;
+  etna::GraphicsPipeline graphicsPipeline;
+  etna::Image TextureComputed;
+  etna::Image TextureImage;
+  etna::Sampler sampler;
   etna::DescriptorSet descriptorSet;
 
   glm::uvec2 resolution;
