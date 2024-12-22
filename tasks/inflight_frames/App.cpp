@@ -25,7 +25,7 @@ App::App()
       .instanceExtensions = instanceExtensions,
       .deviceExtensions = deviceExtensions,
       .physicalDeviceIndexOverride = {},
-      .numFramesInFlight = 1,
+      .numFramesInFlight = 2,
     });
   }
 
@@ -47,22 +47,19 @@ App::App()
 
     resolution = {w, h};  }  commandManager = etna::get_context().createPerFrameCmdMgr();
 
+    context = &etna::get_context();
 
-
-  
-  context = &etna::get_context();
-
-  etna::create_program("texture_processing", {INFLIGHT_FRAMES_SHADERS_ROOT "shadertoy2.comp.spv"});
-  pipelineToy = etna::get_context().getPipelineManager().createComputePipeline("texture_processing", {});
-  
-  TextureComputed = etna::get_context().createImage(etna::Image::CreateInfo{
-    .extent = vk::Extent3D{resolution.x, resolution.y, 1},
-    .name = "image_toy",
-    .format = vk::Format::eR8G8B8A8Unorm,
-    .imageUsage =
-      vk::ImageUsageFlagBits::eSampled |
-        vk::ImageUsageFlagBits::eStorage |
-          vk::ImageUsageFlagBits::eTransferSrc
+    etna::create_program("texture_processing", {INFLIGHT_FRAMES_SHADERS_ROOT "shadertoy2.comp.spv"});
+    pipelineToy = etna::get_context().getPipelineManager().createComputePipeline("texture_processing", {});
+    
+    TextureComputed = etna::get_context().createImage(etna::Image::CreateInfo{
+      .extent = vk::Extent3D{resolution.x, resolution.y, 1},
+      .name = "image_toy",
+      .format = vk::Format::eR8G8B8A8Unorm,
+      .imageUsage =
+        vk::ImageUsageFlagBits::eSampled |
+          vk::ImageUsageFlagBits::eStorage |
+            vk::ImageUsageFlagBits::eTransferSrc
   });
 
   etna::create_program(
@@ -127,6 +124,13 @@ App::App()
   );
 
   stbi_image_free(rawImage);
+
+  ParamsBuffer.push_back(etna::get_context().createBuffer(etna::Buffer::CreateInfo{
+      .size = sizeof(Params),
+      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+      .name = "shaderParams",
+    }));
 }
 
 App::~App()
@@ -139,8 +143,9 @@ void App::run()
   while (!osWindow->isBeingClosed())
   {
     windowing.poll();
-
+    
     drawFrame();
+    countOfFrames++;
   }
 
   ETNA_CHECK_VK_RESULT(etna::get_context().getDevice().waitIdle());
@@ -203,6 +208,13 @@ void App::drawFrame()
       currentCmdBuf.dispatch(groupCountX, groupCountY, 1);
 
     }
+      auto params = Params {
+        .iResolution = resolution,
+        .iMousePosition = osWindow->mouse.freePos,
+        .iTime = std::chrono::duration<float>(std::chrono::system_clock::now() - startTime).count()
+    };
+
+      std::memcpy(ParamsBuffer.data(), &params, sizeof(params));
 
       {
         ETNA_PROFILE_GPU(currentCmdBuf, "Finished Generating texture");
@@ -227,13 +239,14 @@ void App::drawFrame()
           .image = backbuffer,
           .view = backbufferView
         }},
-          {}        }; 
+          {}}; 
           auto set = etna::create_descriptor_set(
           etna::get_shader_program("graphics").getDescriptorLayoutId(0),
           currentCmdBuf,
           {
             etna::Binding{0, TextureComputed.genBinding(sampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
-            etna::Binding{1, TextureImage.genBinding(sampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)}
+            etna::Binding{1, TextureImage.genBinding(sampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+            etna::Binding{2, ParamsBuffer[countOfFrames % 3].genBinding()},
           });
 
         vk::DescriptorSet vkSet = set.getVkSet();

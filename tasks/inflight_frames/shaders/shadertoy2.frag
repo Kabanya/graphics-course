@@ -5,7 +5,11 @@ layout(location = 0) out vec4 fragColor;
 
 layout(binding = 0) uniform sampler2D iChannel0;
 layout(binding = 1) uniform sampler2D iChannel1;
-
+layout(binding = 2, set = 0) uniform params {
+  uvec2 iResolution;
+  uvec2 iMouse;
+  float iTime;
+};
 
 const int   maxSteps = 70;
 const float eps      = 0.01;

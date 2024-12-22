@@ -25,8 +25,19 @@ private:
   void drawFrame();
 
 private:
+
+  struct Params
+  {
+    glm::uvec2 iResolution;
+    glm::uvec2 iMousePosition;
+    float iTime;
+  };
+  std::chrono::system_clock::time_point startTime; 
   OsWindowingManager windowing;
   std::unique_ptr<OsWindow> osWindow;
+
+  std::vector<etna::Buffer> ParamsBuffer;
+  int countOfFrames = 0;
 
   etna::GlobalContext* context;
   etna::ComputePipeline pipelineToy;
