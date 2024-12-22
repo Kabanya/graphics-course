@@ -36,7 +36,7 @@ private:
   OsWindowingManager windowing;
   std::unique_ptr<OsWindow> osWindow;
 
-  std::vector<etna::Buffer> ParamsBuffer;
+  etna::Buffer constants;
   int countOfFrames = 0;
 
   etna::GlobalContext* context;

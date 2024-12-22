@@ -84,9 +84,9 @@ vec2 sdf(in vec3 p) {
     const float SMOOTH_FACTOR = 1.0;
     const vec4 PLANE_NORMAL = vec4(0.0, 0.34, 0.0, 1.0);
 
-    float moveSpeed = sin(0.0 * 1.5) * 2.4;
-    float orbitAngle = 0.0;
-    float ballHeight = sin(0.0) * 1.5;
+    float moveSpeed = sin(iTime * 1.5) * 2.4;
+    float orbitAngle = iTime;
+    float ballHeight = sin(iTime) * 1.5;
 
     // Positions
     vec3 spherePos = vec3(0.0, moveSpeed, 0.0);
@@ -239,6 +239,5 @@ void main()
 {
   vec2 fragCoord = gl_FragCoord.xy;
 
-  vec2 iResolution = vec2(1280.0, 720.0);
   mainImage(fragCoord, iResolution);
 }

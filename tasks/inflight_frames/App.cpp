@@ -9,7 +9,8 @@
 #include <etna/Profiling.hpp>
 
 App::App()
-  : resolution{1280, 720}
+  : startTime(std::chrono::system_clock::now())
+  , resolution{1280, 720}
   , useVsync{true}
 {
   {
@@ -125,12 +126,14 @@ App::App()
 
   stbi_image_free(rawImage);
 
-  ParamsBuffer.push_back(etna::get_context().createBuffer(etna::Buffer::CreateInfo{
-      .size = sizeof(Params),
-      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
-      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
-      .name = "shaderParams",
-    }));
+  constants = context -> createBuffer(etna::Buffer::CreateInfo{
+    .size = sizeof(Params),
+    .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+    .name = "constants",
+  });
+
+  constants.map();
 }
 
 App::~App()
@@ -207,14 +210,14 @@ void App::drawFrame()
      
       currentCmdBuf.dispatch(groupCountX, groupCountY, 1);
 
-    }
-      auto params = Params {
-        .iResolution = resolution,
-        .iMousePosition = osWindow->mouse.freePos,
-        .iTime = std::chrono::duration<float>(std::chrono::system_clock::now() - startTime).count()
-    };
+      }
+        auto params = Params {
+          .iResolution = resolution,
+          .iMousePosition = osWindow->mouse.freePos,
+          .iTime = std::chrono::duration<float>(std::chrono::system_clock::now() - startTime).count()
+      };
 
-      std::memcpy(ParamsBuffer.data(), &params, sizeof(params));
+      std::memcpy(constants.data(), &params, sizeof(constants));
 
       {
         ETNA_PROFILE_GPU(currentCmdBuf, "Finished Generating texture");
@@ -246,7 +249,7 @@ void App::drawFrame()
           {
             etna::Binding{0, TextureComputed.genBinding(sampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
             etna::Binding{1, TextureImage.genBinding(sampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
-            etna::Binding{2, ParamsBuffer[countOfFrames % 3].genBinding()},
+            etna::Binding{2, constants.genBinding()},
           });
 
         vk::DescriptorSet vkSet = set.getVkSet();
