@@ -5,6 +5,7 @@
 #include <etna/RenderTargetStates.hpp>
 #include <etna/Profiling.hpp>
 #include <glm/ext.hpp>
+#include <algorithm>
 
 
 WorldRenderer::WorldRenderer()
@@ -24,7 +25,21 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
     .format = vk::Format::eD32Sfloat,
     .imageUsage = vk::ImageUsageFlagBits::eDepthStencilAttachment,
   });
+
+  constexpr uint16_t MAX_INSTANCES = 5'000;
+  instanceMatricesBuffer = ctx.createBuffer(etna::Buffer::CreateInfo
+  {
+    .size = MAX_INSTANCES * sizeof(glm::mat4x4),
+    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
+    .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+    .name = "instance_matrices",
+  });
+  persistentMapping = instanceMatricesBuffer.map();
+
 }
+
+WorldRenderer::~WorldRenderer() = default;
 
 void WorldRenderer::loadScene(std::filesystem::path path)
 {
@@ -35,9 +50,9 @@ void WorldRenderer::loadShaders()
 {
   etna::create_program(
     "static_mesh_material",
-    {MANY_OBJECTS_MODEL_BAKERY_RENDERER_SHADERS_ROOT "static_mesh.frag.spv",
-     MANY_OBJECTS_MODEL_BAKERY_RENDERER_SHADERS_ROOT "static_mesh.vert.spv"});
-  etna::create_program("static_mesh", {MANY_OBJECTS_MODEL_BAKERY_RENDERER_SHADERS_ROOT "static_mesh.vert.spv"});
+    {MANY_OBJECTS_BASE_RENDERER_SHADERS_ROOT "static_mesh.frag.spv",
+     MANY_OBJECTS_BASE_RENDERER_SHADERS_ROOT "static_mesh.vert.spv"});
+  etna::create_program("static_mesh", {MANY_OBJECTS_BASE_RENDERER_SHADERS_ROOT "static_mesh.vert.spv"});
 }
 
 void WorldRenderer::setupPipelines(vk::Format swapchain_format)
@@ -53,10 +68,12 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
   staticMeshPipeline = {};
   staticMeshPipeline = pipelineManager.createGraphicsPipeline(
     "static_mesh_material",
-    etna::GraphicsPipeline::CreateInfo{
+    etna::GraphicsPipeline::CreateInfo
+    {
       .vertexShaderInput = sceneVertexInputDesc,
       .rasterizationConfig =
-        vk::PipelineRasterizationStateCreateInfo{
+        vk::PipelineRasterizationStateCreateInfo
+        {
           .polygonMode = vk::PolygonMode::eFill,
           .cullMode = vk::CullModeFlagBits::eBack,
           .frontFace = vk::FrontFace::eCounterClockwise,
@@ -81,41 +98,128 @@ void WorldRenderer::update(const FramePacket& packet)
     const float aspect = float(resolution.x) / float(resolution.y);
     worldViewProj = packet.mainCam.projTm(aspect) * packet.mainCam.viewTm();
   }
+
+  auto instanceMeshes = sceneMgr->getInstanceMeshes();
+  auto instanceMatricesData = sceneMgr->getInstanceMatrices();
+
+  if (instanceMeshes.empty())
+    return;
+
+  const size_t instanceCount = instanceMeshes.size();
+  
+  static std::vector<std::pair<uint32_t, uint32_t>> meshInstancePairs;
+  meshInstancePairs.clear();
+  meshInstancePairs.reserve(instanceCount);
+  
+  for (size_t i = 0; i < instanceCount; ++i)
+  {
+    meshInstancePairs.emplace_back(instanceMeshes[i], static_cast<uint32_t>(i));
+  }
+
+  std::sort(meshInstancePairs.begin(), meshInstancePairs.end());
+
+  instanceGroups.clear();
+  instanceMatrices.clear();
+  instanceMatrices.reserve(instanceCount);
+
+  if (meshInstancePairs.empty())
+    return;
+  uint32_t currentMesh = meshInstancePairs[0].first;
+  uint32_t groupStart = 0;
+
+  for (size_t i = 0; i < meshInstancePairs.size(); ++i)
+  {
+    const auto [meshIdx, instanceIdx] = meshInstancePairs[i];
+    instanceMatrices.push_back(instanceMatricesData[instanceIdx]);
+
+    if (meshIdx != currentMesh || i == meshInstancePairs.size() - 1)
+    {
+      uint32_t groupSize = static_cast<uint32_t>(i) - groupStart;
+      if (meshIdx == currentMesh && i == meshInstancePairs.size() - 1)
+        groupSize++;
+
+      instanceGroups.push_back(InstanceGroup{
+        .meshIdx = currentMesh,
+        .firstInstance = groupStart,
+        .instanceCount = groupSize,
+      });
+
+      if (meshIdx != currentMesh)
+      {
+        currentMesh = meshIdx;
+        groupStart = static_cast<uint32_t>(i);
+      }
+    }
+  }
+
+  if (!instanceMatrices.empty() && persistentMapping)
+  {
+    const size_t copySize = instanceMatrices.size() * sizeof(glm::mat4x4);
+    std::memcpy(persistentMapping, instanceMatrices.data(), copySize);
+  }
 }
 
 void WorldRenderer::renderScene(
   vk::CommandBuffer cmd_buf, const glm::mat4x4& glob_tm, vk::PipelineLayout pipeline_layout)
 {
-  if (!sceneMgr->getVertexBuffer())
+  if (!sceneMgr->getVertexBuffer() || instanceGroups.empty())
     return;
 
   cmd_buf.bindVertexBuffers(0, {sceneMgr->getVertexBuffer()}, {0});
   cmd_buf.bindIndexBuffer(sceneMgr->getIndexBuffer(), 0, vk::IndexType::eUint32);
 
-  pushConst2M.projView = glob_tm;
-
-  auto instanceMeshes = sceneMgr->getInstanceMeshes();
-  auto instanceMatrices = sceneMgr->getInstanceMatrices();
-
-  auto meshes = sceneMgr->getMeshes();
-  auto relems = sceneMgr->getRenderElements();
-
-  for (std::size_t instIdx = 0; instIdx < instanceMeshes.size(); ++instIdx)
+  auto shaderInfo = etna::get_shader_program("static_mesh_material");
+  if (shaderInfo.isDescriptorSetUsed(0))
   {
-    pushConst2M.model = instanceMatrices[instIdx];
+    instanceMatricesDescriptorSet = etna::create_descriptor_set(
+      shaderInfo.getDescriptorLayoutId(0),
+      cmd_buf,
+      {etna::Binding{0, instanceMatricesBuffer.genBinding()}});
 
-    cmd_buf.pushConstants<PushConstants>(
-      pipeline_layout, vk::ShaderStageFlagBits::eVertex, 0, {pushConst2M});
+    cmd_buf.bindDescriptorSets(
+      vk::PipelineBindPoint::eGraphics, pipeline_layout, 0, 
+      {instanceMatricesDescriptorSet.getVkSet()}, {});
+  }
+  else 
+  {
+    return;
+  }
 
-    const auto meshIdx = instanceMeshes[instIdx];
+  // Push constants
+  struct PushConstantsCompat { glm::mat4x4 mProjView; } pushConstCompat;
+  pushConstCompat.mProjView = glob_tm;
+  cmd_buf.pushConstants<PushConstantsCompat>(
+    pipeline_layout, vk::ShaderStageFlagBits::eVertex, 0, {pushConstCompat});
 
-    for (std::size_t j = 0; j < meshes[meshIdx].relemCount; ++j)
+  // render group
+  const std::span<const Mesh>& meshes = sceneMgr->getMeshes();
+  const std::span<const RenderElement>& renderElements = sceneMgr->getRenderElements();
+
+  for (const auto& group : instanceGroups)
+  {
+    if (group.meshIdx >= meshes.size())
+      continue;
+
+    const auto&[firstRelem, relemCount] = meshes[group.meshIdx];
+
+    for (size_t j = 0; j < relemCount; ++j)
     {
-      const auto relemIdx = meshes[meshIdx].firstRelem + j;
-      const auto& relem = relems[relemIdx];
-      cmd_buf.drawIndexed(relem.indexCount, 1, relem.indexOffset, relem.vertexOffset, 0);
+      const uint64_t renderElemId = firstRelem + j;
+      if (renderElemId >= renderElements.size())
+        continue;
+
+      const RenderElement& renderElemIndex = renderElements[renderElemId];
+      
+      cmd_buf.drawIndexed(
+        renderElemIndex.indexCount,
+        group.instanceCount,
+        renderElemIndex.indexOffset,
+        renderElemIndex.vertexOffset,
+        group.firstInstance);
     }
   }
+
+  etna::flush_barriers(cmd_buf);
 }
 
 void WorldRenderer::renderWorld(

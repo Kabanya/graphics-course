@@ -1,7 +1,7 @@
 
-add_executable(many_objects_model_bakery_baker
+add_executable(many_objects_base_baker
   main.cpp
 )
 
-target_link_libraries(many_objects_model_bakery_baker
+target_link_libraries(many_objects_base_baker
   PRIVATE tinygltf)

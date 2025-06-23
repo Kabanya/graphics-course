@@ -4,6 +4,7 @@
 #include <etna/Sampler.hpp>
 #include <etna/Buffer.hpp>
 #include <etna/GraphicsPipeline.hpp>
+#include <etna/DescriptorSet.hpp>
 #include <glm/glm.hpp>
 
 #include "scene/SceneManager.hpp"
@@ -16,6 +17,7 @@ class WorldRenderer
 {
 public:
   WorldRenderer();
+  ~WorldRenderer();
 
   void loadScene(std::filesystem::path path);
 
@@ -33,18 +35,25 @@ private:
   void renderScene(
     vk::CommandBuffer cmd_buf, const glm::mat4x4& glob_tm, vk::PipelineLayout pipeline_layout);
 
+  struct InstanceGroup
+  {
+    std::uint32_t meshIdx;
+    std::uint32_t firstInstance;
+    std::uint32_t instanceCount;
+  };
 
 private:
   std::unique_ptr<SceneManager> sceneMgr;
 
   etna::Image mainViewDepth;
   etna::Buffer constants;
+  etna::Buffer instanceMatricesBuffer;
+  etna::DescriptorSet instanceMatricesDescriptorSet;
 
   struct PushConstants
   {
     glm::mat4x4 projView;
-    glm::mat4x4 model;
-  } pushConst2M;
+  } pushConst;
 
   glm::mat4x4 worldViewProj;
   glm::mat4x4 lightMatrix;
@@ -52,4 +61,9 @@ private:
   etna::GraphicsPipeline staticMeshPipeline{};
 
   glm::uvec2 resolution;
+  
+  std::vector<InstanceGroup> instanceGroups;
+  std::vector<glm::mat4x4> instanceMatrices;
+
+  void* persistentMapping = nullptr;
 };
