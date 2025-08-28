@@ -25,6 +25,8 @@ public:
   void allocateResources(glm::uvec2 swapchain_resolution);
   void setupPipelines(vk::Format swapchain_format);
 
+  bool isVisibleBoundingBox(const glm::vec3& min, const glm::vec3& max, const glm::mat4& mvp) const;
+
   void debugInput(const Keyboard& kb);
   void update(const FramePacket& packet);
   void drawGui();
@@ -61,7 +63,7 @@ private:
   etna::GraphicsPipeline staticMeshPipeline{};
 
   glm::uvec2 resolution;
-  
+
   std::vector<InstanceGroup> instanceGroups;
   std::vector<glm::mat4x4> instanceMatrices;
 

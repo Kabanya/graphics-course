@@ -5,6 +5,7 @@
 #include <etna/RenderTargetStates.hpp>
 #include <etna/Profiling.hpp>
 #include <glm/ext.hpp>
+#include <tracy/Tracy.hpp>
 #include <algorithm>
 
 
@@ -87,6 +88,33 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
     });
 }
 
+bool WorldRenderer::isVisibleBoundingBox(const glm::vec3& min, const glm::vec3& max, const glm::mat4& mvp) const
+{
+  std::array<glm::vec3, 8> vertices = {
+    glm::vec3(min.x, min.y, min.z),
+    glm::vec3(min.x, min.y, max.z),
+    glm::vec3(min.x, max.y, min.z),
+    glm::vec3(min.x, max.y, max.z),
+    glm::vec3(max.x, min.y, min.z),
+    glm::vec3(max.x, min.y, max.z),
+    glm::vec3(max.x, max.y, min.z),
+    glm::vec3(max.x, max.y, max.z),
+  };
+
+  for (const auto& v : vertices) {
+    glm::vec4 clip = mvp * glm::vec4(v, 1.0f);
+    if (clip.w != 0.0f) {
+      float x = clip.x / clip.w;
+      float y = clip.y / clip.w;
+      float z = clip.z / clip.w;
+      if (x >= -1.0f && x <= 1.0f && y >= -1.0f && y <= 1.0f && z >= 0.0f && z <= 1.0f) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 void WorldRenderer::debugInput(const Keyboard&) {}
 
 void WorldRenderer::update(const FramePacket& packet)
@@ -106,17 +134,48 @@ void WorldRenderer::update(const FramePacket& packet)
     return;
 
   const size_t instanceCount = instanceMeshes.size();
-  
   static std::vector<std::pair<uint32_t, uint32_t>> meshInstancePairs;
   meshInstancePairs.clear();
   meshInstancePairs.reserve(instanceCount);
-  
+
   for (size_t i = 0; i < instanceCount; ++i)
   {
     meshInstancePairs.emplace_back(instanceMeshes[i], static_cast<uint32_t>(i));
   }
 
   std::sort(meshInstancePairs.begin(), meshInstancePairs.end());
+
+  static std::vector<std::pair<uint32_t, uint32_t>> visiblePairs;
+  visiblePairs.clear();
+  visiblePairs.reserve(instanceCount);
+
+  for (const auto& pair : meshInstancePairs)
+  {
+    auto [meshIdx, instanceIdx] = pair;
+    auto instanceMatrix = instanceMatricesData[instanceIdx];
+    bool visible = false;
+    const auto& meshes = sceneMgr->getMeshes();
+    [[maybe_unused]] const auto& relems = sceneMgr->getRenderElements();
+    const auto& bboxes = sceneMgr->getRelemsBoundingBoxes();
+    const auto& mesh = meshes[meshIdx];
+    for (uint32_t j = 0; j < mesh.relemCount; ++j)
+    {
+      uint32_t relemIdx = mesh.firstRelem + j;
+      const auto& bbox = bboxes[relemIdx];
+      glm::vec3 min(bbox.aabb.minX, bbox.aabb.minY, bbox.aabb.minZ);
+      glm::vec3 max(bbox.aabb.maxX, bbox.aabb.maxY, bbox.aabb.maxZ);
+      if (isVisibleBoundingBox(min, max, worldViewProj * instanceMatrix))
+      {
+        visible = true;
+        break;
+      }
+    }
+    if (visible)
+      visiblePairs.push_back(pair);
+  }
+  meshInstancePairs = std::move(visiblePairs);
+  tracy::Profiler::PlotData("Total Instances", static_cast<int64_t>(instanceCount));
+  tracy::Profiler::PlotData("Visible Instances", static_cast<int64_t>(instanceMatrices.size()));
 
   instanceGroups.clear();
   instanceMatrices.clear();
@@ -152,7 +211,7 @@ void WorldRenderer::update(const FramePacket& packet)
     }
   }
 
-  if (!instanceMatrices.empty() && persistentMapping)
+  if (!instanceMatrices.empty() && (persistentMapping != nullptr))
   {
     const size_t copySize = instanceMatrices.size() * sizeof(glm::mat4x4);
     std::memcpy(persistentMapping, instanceMatrices.data(), copySize);
@@ -177,10 +236,10 @@ void WorldRenderer::renderScene(
       {etna::Binding{0, instanceMatricesBuffer.genBinding()}});
 
     cmd_buf.bindDescriptorSets(
-      vk::PipelineBindPoint::eGraphics, pipeline_layout, 0, 
+      vk::PipelineBindPoint::eGraphics, pipeline_layout, 0,
       {instanceMatricesDescriptorSet.getVkSet()}, {});
   }
-  else 
+  else
   {
     return;
   }
@@ -194,6 +253,7 @@ void WorldRenderer::renderScene(
   // render group
   const std::span<const Mesh>& meshes = sceneMgr->getMeshes();
   const std::span<const RenderElement>& renderElements = sceneMgr->getRenderElements();
+  // const std::span<const BoundingBox>& boundingBoxes = sceneMgr->getBoundingBoxes();
 
   for (const auto& group : instanceGroups)
   {
@@ -209,7 +269,7 @@ void WorldRenderer::renderScene(
         continue;
 
       const RenderElement& renderElemIndex = renderElements[renderElemId];
-      
+
       cmd_buf.drawIndexed(
         renderElemIndex.indexCount,
         group.instanceCount,

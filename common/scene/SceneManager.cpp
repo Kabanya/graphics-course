@@ -1,6 +1,8 @@
 #include "SceneManager.hpp"
 
+#include <cstddef>
 #include <stack>
+#include <cfloat>
 
 #include <spdlog/spdlog.h>
 #include <fmt/std.h>
@@ -287,6 +289,26 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(const tinygltf::Model&
                     : 0,
       };
 
+      BoundingBox bBox;
+      bBox.aabb.minX = FLT_MAX;  bBox.aabb.minY = FLT_MAX;  bBox.aabb.minZ = FLT_MAX;
+      bBox.aabb.maxX = -FLT_MAX; bBox.aabb.maxY = -FLT_MAX; bBox.aabb.maxZ = -FLT_MAX;
+
+      const std::byte* posPtr = ptrs[1];
+      for (size_t k = 0; k < vertexCount; ++k)
+      {
+        glm::vec3 pos;
+        std::memcpy(&pos, posPtr, sizeof(pos));
+        bBox.aabb.minX = std::min(bBox.aabb.minX, pos.x);
+        bBox.aabb.minY = std::min(bBox.aabb.minY, pos.y);
+        bBox.aabb.minZ = std::min(bBox.aabb.minZ, pos.z);
+        bBox.aabb.maxX = std::max(bBox.aabb.maxX, pos.x);
+        bBox.aabb.maxY = std::max(bBox.aabb.maxY, pos.y);
+        bBox.aabb.maxZ = std::max(bBox.aabb.maxZ, pos.z);
+        posPtr += strides[1];
+      }
+
+      result.relems_bboxes.push_back(bBox);
+
       for (std::size_t i = 0; i < vertexCount; ++i)
       {
         auto& vtx = result.vertices.emplace_back();
@@ -388,10 +410,11 @@ void SceneManager::selectScene(std::filesystem::path path)
   instanceMatrices = std::move(instMats);
   instanceMeshes = std::move(instMeshes);
 
-  auto [verts, inds, relems, meshs] = processMeshes(model);
+  auto [verts, inds, relems, meshs, b_boxes] = processMeshes(model);
 
   renderElements = std::move(relems);
   meshes = std::move(meshs);
+  boundingBoxes = std::move(b_boxes);
 
   uploadData(verts, inds);
 }
