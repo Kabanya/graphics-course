@@ -68,4 +68,6 @@ private:
   std::vector<glm::mat4x4> instanceMatrices;
 
   void* persistentMapping = nullptr;
+  std::uint32_t maxInstances = 0;
+  bool enableFrustumCulling = true;
 };

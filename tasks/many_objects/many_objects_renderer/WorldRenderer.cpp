@@ -27,17 +27,16 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
     .imageUsage = vk::ImageUsageFlagBits::eDepthStencilAttachment,
   });
 
-  constexpr uint16_t MAX_INSTANCES = 5'000;
+  maxInstances = 1;
   instanceMatricesBuffer = ctx.createBuffer(etna::Buffer::CreateInfo
   {
-    .size = MAX_INSTANCES * sizeof(glm::mat4x4),
+    .size = maxInstances * sizeof(glm::mat4x4),
     .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
     .memoryUsage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
     .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
     .name = "instance_matrices",
   });
   persistentMapping = instanceMatricesBuffer.map();
-
 }
 
 WorldRenderer::~WorldRenderer() = default;
@@ -45,6 +44,26 @@ WorldRenderer::~WorldRenderer() = default;
 void WorldRenderer::loadScene(std::filesystem::path path)
 {
   sceneMgr->selectScene(path);
+
+  auto instanceCount = sceneMgr->getInstanceMatrices().size();
+  if (instanceCount > maxInstances)
+  {
+    maxInstances = static_cast<uint32_t>(instanceCount);
+
+    instanceMatricesBuffer = {};
+    persistentMapping = nullptr;
+
+    auto& ctx = etna::get_context();
+    instanceMatricesBuffer = ctx.createBuffer(etna::Buffer::CreateInfo
+    {
+      .size = maxInstances * sizeof(glm::mat4x4),
+      .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
+      .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+      .name = "instance_matrices",
+    });
+    persistentMapping = instanceMatricesBuffer.map();
+  }
 }
 
 void WorldRenderer::loadShaders()
@@ -90,7 +109,8 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
 
 bool WorldRenderer::isVisibleBoundingBox(const glm::vec3& min, const glm::vec3& max, const glm::mat4& mvp) const
 {
-  std::array<glm::vec3, 8> vertices = {
+  std::array<glm::vec3, 8> vertices =
+  {
     glm::vec3(min.x, min.y, min.z),
     glm::vec3(min.x, min.y, max.z),
     glm::vec3(min.x, max.y, min.z),
@@ -101,7 +121,8 @@ bool WorldRenderer::isVisibleBoundingBox(const glm::vec3& min, const glm::vec3& 
     glm::vec3(max.x, max.y, max.z),
   };
 
-  for (const auto& v : vertices) {
+  for (const auto& v : vertices)
+  {
     glm::vec4 clip = mvp * glm::vec4(v, 1.0f);
     if (clip.w != 0.0f) {
       float x = clip.x / clip.w;
@@ -115,7 +136,11 @@ bool WorldRenderer::isVisibleBoundingBox(const glm::vec3& min, const glm::vec3& 
   return false;
 }
 
-void WorldRenderer::debugInput(const Keyboard&) {}
+void WorldRenderer::debugInput(const Keyboard& kb)
+{
+  if (kb[KeyboardKey::kC] == ButtonState::Falling)
+    enableFrustumCulling = !enableFrustumCulling;
+}
 
 void WorldRenderer::update(const FramePacket& packet)
 {
@@ -139,9 +164,7 @@ void WorldRenderer::update(const FramePacket& packet)
   meshInstancePairs.reserve(instanceCount);
 
   for (size_t i = 0; i < instanceCount; ++i)
-  {
     meshInstancePairs.emplace_back(instanceMeshes[i], static_cast<uint32_t>(i));
-  }
 
   std::sort(meshInstancePairs.begin(), meshInstancePairs.end());
 
@@ -149,32 +172,41 @@ void WorldRenderer::update(const FramePacket& packet)
   visiblePairs.clear();
   visiblePairs.reserve(instanceCount);
 
-  for (const auto& pair : meshInstancePairs)
+  if (enableFrustumCulling)
   {
-    auto [meshIdx, instanceIdx] = pair;
-    auto instanceMatrix = instanceMatricesData[instanceIdx];
-    bool visible = false;
-    const auto& meshes = sceneMgr->getMeshes();
-    [[maybe_unused]] const auto& relems = sceneMgr->getRenderElements();
-    const auto& bboxes = sceneMgr->getRelemsBoundingBoxes();
-    const auto& mesh = meshes[meshIdx];
-    for (uint32_t j = 0; j < mesh.relemCount; ++j)
+    for (const auto& pair : meshInstancePairs)
     {
-      uint32_t relemIdx = mesh.firstRelem + j;
-      const auto& bbox = bboxes[relemIdx];
-      glm::vec3 min(bbox.aabb.minX, bbox.aabb.minY, bbox.aabb.minZ);
-      glm::vec3 max(bbox.aabb.maxX, bbox.aabb.maxY, bbox.aabb.maxZ);
-      if (isVisibleBoundingBox(min, max, worldViewProj * instanceMatrix))
+      auto [meshIdx, instanceIdx] = pair;
+      auto instanceMatrix = instanceMatricesData[instanceIdx];
+
+      bool visible = false;
+
+      const auto& meshes = sceneMgr->getMeshes();
+      const auto& bboxes = sceneMgr->getRelemsBoundingBoxes();
+      const auto& mesh = meshes[meshIdx];
+
+      for (uint32_t j = 0; j < mesh.relemCount; ++j)
       {
-        visible = true;
-        break;
+        uint32_t relemIdx = mesh.firstRelem + j;
+        const auto& bbox = bboxes[relemIdx];
+        glm::vec3 min(bbox.aabb.minX, bbox.aabb.minY, bbox.aabb.minZ);
+        glm::vec3 max(bbox.aabb.maxX, bbox.aabb.maxY, bbox.aabb.maxZ);
+        if (isVisibleBoundingBox(min, max, worldViewProj * instanceMatrix))
+        {
+          visible = true;
+          break;
+        }
       }
+      if (visible)
+        visiblePairs.push_back(pair);
     }
-    if (visible)
-      visiblePairs.push_back(pair);
   }
+  else
+  {
+    visiblePairs = meshInstancePairs;
+  }
+
   meshInstancePairs = std::move(visiblePairs);
-  tracy::Profiler::PlotData("Total Instances", static_cast<int64_t>(instanceCount));
   tracy::Profiler::PlotData("Visible Instances", static_cast<int64_t>(instanceMatrices.size()));
 
   instanceGroups.clear();
