@@ -7,6 +7,8 @@
 #include <etna/Buffer.hpp>
 #include <etna/BlockingTransferHelper.hpp>
 #include <etna/VertexInput.hpp>
+#include <vulkan/vulkan.hpp>
+#include <vulkan/vulkan_structs.hpp>
 
 
 // A single render element (relem) corresponds to a single draw call
@@ -29,6 +31,11 @@ struct Mesh
   std::uint32_t relemCount;
 };
 
+struct BoundingBox
+{
+  vk::AabbPositionsKHR aabb;
+};
+
 class SceneManager
 {
 public:
@@ -46,6 +53,8 @@ public:
 
   // Every relem is a single draw call
   std::span<const RenderElement> getRenderElements() { return renderElements; }
+
+  std::span<const BoundingBox> getRelemsBoundingBoxes() const { return boundingBoxes; }
 
   vk::Buffer getVertexBuffer() { return unifiedVbuf.get(); }
   vk::Buffer getIndexBuffer() { return unifiedIbuf.get(); }
@@ -79,6 +88,7 @@ private:
     std::vector<std::uint32_t> indices;
     std::vector<RenderElement> relems;
     std::vector<Mesh> meshes;
+    std::vector<BoundingBox> relems_bboxes;
   };
   ProcessedMeshes processMeshes(const tinygltf::Model& model) const;
   void uploadData(std::span<const Vertex> vertices, std::span<const std::uint32_t>);
@@ -92,6 +102,7 @@ private:
   std::vector<Mesh> meshes;
   std::vector<glm::mat4x4> instanceMatrices;
   std::vector<std::uint32_t> instanceMeshes;
+  std::vector<BoundingBox> boundingBoxes;
 
   etna::Buffer unifiedVbuf;
   etna::Buffer unifiedIbuf;
