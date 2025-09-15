@@ -4,7 +4,9 @@
 #include <etna/Sampler.hpp>
 #include <etna/Buffer.hpp>
 #include <etna/GraphicsPipeline.hpp>
+#include <etna/ComputePipeline.hpp>
 #include <etna/DescriptorSet.hpp>
+#include <glm/detail/qualifier.hpp>
 #include <glm/glm.hpp>
 
 #include "scene/SceneManager.hpp"
@@ -44,10 +46,16 @@ private:
     std::uint32_t instanceCount;
   };
 
+  void createTerrainMap(vk::CommandBuffer cmd_buf);
+  void renderTerrain(vk::CommandBuffer cmd_buf);
+
 private:
   std::unique_ptr<SceneManager> sceneMgr;
 
   etna::Image mainViewDepth;
+  etna::Image perlin_terrain_image;
+  etna::Sampler defaultSampler;
+
   etna::Buffer constants;
   etna::Buffer instanceMatricesBuffer;
   etna::DescriptorSet instanceMatricesDescriptorSet;
@@ -57,17 +65,30 @@ private:
     glm::mat4x4 projView;
   } pushConst;
 
+  glm::vec3 camView;
   glm::mat4x4 worldViewProj;
   glm::mat4x4 lightMatrix;
 
   etna::GraphicsPipeline staticMeshPipeline{};
+  etna::GraphicsPipeline terrainPipeline{};
+  etna::ComputePipeline perlinPipeline{};
+
+  etna::Sampler perlinSampler;
 
   glm::uvec2 resolution;
 
   std::vector<InstanceGroup> instanceGroups;
   std::vector<glm::mat4x4> instanceMatrices;
 
+  struct TerrainConsts
+  {
+    glm::mat4 proj;
+    glm::vec4 eye;
+    std::int32_t enableTessellation = 1;
+  };
+
   void* persistentMapping = nullptr;
   std::uint32_t maxInstances = 0;
   bool enableFrustumCulling = true;
+  bool enableTessellation = true;
 };

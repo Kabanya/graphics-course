@@ -32,7 +32,7 @@ out gl_PerVertex { vec4 gl_Position; };
 void main(void)
 {
   mat4 mModel = instanceMatrices.matrices[gl_InstanceIndex];
-  
+
   const vec4 wNorm = vec4(decode_normal(floatBitsToInt(vPosNorm.w)),     0.0f);
   const vec4 wTang = vec4(decode_normal(floatBitsToInt(vTexCoordAndTang.z)), 0.0f);
 

@@ -12,4 +12,8 @@ target_link_libraries(terrain_renderer
 target_add_shaders(terrain_renderer
   shaders/static_mesh.frag
   shaders/static_mesh.vert
+  shaders/perlin_terrain.comp
+  shaders/terrain.tesc
+  shaders/terrain.tese
+  shaders/quad.vert
 )
