@@ -54,16 +54,12 @@ private:
 
   etna::Image mainViewDepth;
   etna::Image perlin_terrain_image;
+  etna::Image normal_terrain_image;
   etna::Sampler defaultSampler;
 
   etna::Buffer constants;
   etna::Buffer instanceMatricesBuffer;
   etna::DescriptorSet instanceMatricesDescriptorSet;
-
-  struct PushConstants
-  {
-    glm::mat4x4 projView;
-  } pushConst;
 
   glm::vec3 camView;
   glm::mat4x4 worldViewProj;
@@ -72,6 +68,7 @@ private:
   etna::GraphicsPipeline staticMeshPipeline{};
   etna::GraphicsPipeline terrainPipeline{};
   etna::ComputePipeline perlinPipeline{};
+  etna::ComputePipeline normalPipeline{};
 
   etna::Sampler perlinSampler;
 
@@ -83,12 +80,27 @@ private:
   struct TerrainConsts
   {
     glm::mat4 proj;
-    glm::vec4 eye;
+    glm::mat4 viewProj;
+    glm::vec4 camView;
+    glm::vec2 textureSize;
     std::int32_t enableTessellation = 1;
+    float minTessLevel = 1.0f;    // Добавить
+    float maxTessLevel = 32.0f;   // Добавить
+    float minDistance = 10.0f;    // Добавить
+    float maxDistance = 200.0f;   // Добавить
   };
 
   void* persistentMapping = nullptr;
-  std::uint32_t maxInstances = 0;
   bool enableFrustumCulling = true;
   bool enableTessellation = true;
+  std::uint32_t maxInstances = 0;
+
+  static constexpr std::uint32_t TERRAIN_TEXTURE_SIZE_WIDTH  = 4096;
+  static constexpr std::uint32_t TERRAIN_TEXTURE_SIZE_HEIGHT = 4096;
+  static constexpr std::uint32_t COMPUTE_WORKGROUP_SIZE = 32;
+  static constexpr std::uint32_t PATCH_SUBDIVISION = 8;
+  static constexpr std::uint32_t GROUP_COUNT_X =
+   (TERRAIN_TEXTURE_SIZE_WIDTH + COMPUTE_WORKGROUP_SIZE - 1) / COMPUTE_WORKGROUP_SIZE;
+  static constexpr std::uint32_t GROUP_COUNT_Y =
+   (TERRAIN_TEXTURE_SIZE_HEIGHT + COMPUTE_WORKGROUP_SIZE - 1) / COMPUTE_WORKGROUP_SIZE;
 };

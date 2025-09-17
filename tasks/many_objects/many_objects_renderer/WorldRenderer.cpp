@@ -207,7 +207,7 @@ void WorldRenderer::update(const FramePacket& packet)
   }
 
   meshInstancePairs = std::move(visiblePairs);
-  tracy::Profiler::PlotData("Visible Instances", static_cast<int64_t>(instanceMatrices.size()));
+  // tracy::Profiler::PlotData("Visible Instances", static_cast<int64_t>(instanceMatrices.size()));
 
   instanceGroups.clear();
   instanceMatrices.clear();
