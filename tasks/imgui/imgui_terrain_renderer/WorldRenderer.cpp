@@ -187,13 +187,28 @@ bool WorldRenderer::isVisibleBoundingBox(const glm::vec3& min, const glm::vec3& 
 
 void WorldRenderer::debugInput(const Keyboard& kb)
 {
-  if (kb[KeyboardKey::kC] == ButtonState::Falling) {
+  if (kb[KeyboardKey::k1] == ButtonState::Falling) {
     enableFrustumCulling = !enableFrustumCulling;
     printf("Frustum Culling: %s\n", enableFrustumCulling ? "ON" : "OFF");
   }
-  if (kb[KeyboardKey::kT] == ButtonState::Falling) {
+  if (kb[KeyboardKey::k2] == ButtonState::Falling) {
     enableTessellation = !enableTessellation;
     printf("Tessellation: %s\n", enableTessellation ? "ON" : "OFF");
+  }
+  if (kb[KeyboardKey::k3] == ButtonState::Falling) {
+    enableTerrainRendering = !enableTerrainRendering;
+    printf("Terrain Rendering: %s\n", enableTerrainRendering ? "ON" : "OFF");
+  }
+  if (kb[KeyboardKey::k4] == ButtonState::Falling) {
+    enableSceneRendering = !enableSceneRendering;
+    printf("Avocados Rendering: %s\n", enableSceneRendering ? "ON" : "OFF");
+  }
+  if (kb[KeyboardKey::kZ] == ButtonState::Falling) {
+    bool allOpen = showRenderSettings && showPerformanceInfo && showTerrainSettings;
+    showRenderSettings = !allOpen;
+    showPerformanceInfo = !allOpen;
+    showTerrainSettings = !allOpen;
+    printf("All windows %s\n", allOpen ? "hidden" : "shown");
   }
 }
 
@@ -393,9 +408,11 @@ void WorldRenderer::renderWorld(
       {.image = mainViewDepth.get(), .view = mainViewDepth.getView({})});
 
     cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, staticMeshPipeline.getVkPipeline());
+  }
+  if (enableSceneRendering) {
     renderScene(cmd_buf, staticMeshPipeline.getVkPipelineLayout());
   }
-
+  if (enableTerrainRendering)
   {
     ETNA_PROFILE_GPU(cmd_buf, renderTerrain);
     etna::RenderTargetState renderTargets(
@@ -403,8 +420,8 @@ void WorldRenderer::renderWorld(
       {{0, 0}, {resolution.x, resolution.y}},
       {{.image = target_image, .view = target_image_view, .loadOp = vk::AttachmentLoadOp::eLoad}},
       {.image = mainViewDepth.get(), .view = mainViewDepth.getView({}), .loadOp = vk::AttachmentLoadOp::eLoad});
-    renderTerrain(cmd_buf);
-  }
+      renderTerrain(cmd_buf);
+    }
 }
 
 void WorldRenderer::renderTerrain(vk::CommandBuffer cmd_buf)
@@ -427,7 +444,7 @@ void WorldRenderer::renderTerrain(vk::CommandBuffer cmd_buf)
   cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, terrainPipeline.getVkPipeline());
   cmd_buf.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout, 0, 1, &vkSet, 0, nullptr);
 
-  cmd_buf.draw(4, (4096 * 4096) / (128 * 128), 0, 0);
+  cmd_buf.draw(4, (TERRAIN_TEXTURE_SIZE_WIDTH * TERRAIN_TEXTURE_SIZE_HEIGHT) / (128 * 128), 0, 0);
 }
 
 void WorldRenderer::createTerrainMap(vk::CommandBuffer cmd_buf)
@@ -534,16 +551,41 @@ void WorldRenderer::createTerrainMap(vk::CommandBuffer cmd_buf)
 
 void WorldRenderer::drawGui()
 {
-  ImGui::Begin("Simple render settings");
+  // 1. Performance & Info
+  if (showPerformanceInfo)
+  {
+    ImGui::Begin("Performance & Info", &showPerformanceInfo);
+    ImGui::Text(
+      "Application average %.3f ms/frame (%.1f FPS)",
+      1000.0f / ImGui::GetIO().Framerate,
+      ImGui::GetIO().Framerate);
+    ImGui::NewLine();
+    ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Press 'B' to recompile and reload shaders");
+    ImGui::End();
+  }
+  // 2. Enable settings
+  if (showRenderSettings)
+  {
+    ImGui::Begin("Render Settings", &showRenderSettings);
+    ImGui::Checkbox("Enable Frustum Culling", &enableFrustumCulling);
+    ImGui::Checkbox("Enable Tessellation", &enableTessellation);
+    ImGui::Checkbox("Enable Terrain Rendering", &enableTerrainRendering);
+    ImGui::Checkbox("Enable Avocados Rendering", &enableSceneRendering);
+    ImGui::End();
+  }
+  // 3. Terrain settings
+  if (showTerrainSettings)
+  {
+    ImGui::Begin("Terrain Settings", &showTerrainSettings);
+    float color[3]{uniformParams.baseColor.r, uniformParams.baseColor.g, uniformParams.baseColor.b};
+    ImGui::ColorEdit3(
+      "Meshes base color", color, ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoInputs);
+    uniformParams.baseColor = {color[0], color[1], color[2]};
 
+    float pos[3]{uniformParams.lightPos.x, uniformParams.lightPos.y, uniformParams.lightPos.z};
+    ImGui::SliderFloat3("Light source position", pos, -10.f, 10.f);
+    uniformParams.lightPos = {pos[0], pos[1], pos[2]};
 
-  ImGui::Text(
-    "Application average %.3f ms/frame (%.1f FPS)",
-    1000.0f / ImGui::GetIO().Framerate,
-    ImGui::GetIO().Framerate);
-
-  ImGui::NewLine();
-
-  ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Press 'B' to recompile and reload shaders");
-  ImGui::End();
+    ImGui::End();
+  }
 }

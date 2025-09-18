@@ -8,6 +8,7 @@
 #include <etna/DescriptorSet.hpp>
 #include <glm/glm.hpp>
 
+#include "shaders/UniformParams.h"
 #include "scene/SceneManager.hpp"
 #include "wsi/Keyboard.hpp"
 
@@ -77,12 +78,25 @@ private:
     int enableTessellation;
   };
 
+  UniformParams uniformParams{
+    .lightMatrix = {},
+    .lightPos = {},
+    .time = {},
+    .baseColor = {0.9f, 0.92f, 1.0f},
+  };
+
   etna::Sampler defaultSampler;
 
   glm::uvec2 resolution;
 
-  bool enableFrustumCulling = false;
-  bool enableTessellation = true;
+  bool enableFrustumCulling   = true;
+  bool enableTessellation     = true;
+  bool enableTerrainRendering = true;
+  bool enableSceneRendering   = true;
+
+  bool showRenderSettings     = true;
+  bool showPerformanceInfo    = true;
+  bool showTerrainSettings    = true;
   static constexpr std::uint32_t TERRAIN_TEXTURE_SIZE_WIDTH  = 4096;
   static constexpr std::uint32_t TERRAIN_TEXTURE_SIZE_HEIGHT = 4096;
   static constexpr std::uint32_t COMPUTE_WORKGROUP_SIZE = 32;
