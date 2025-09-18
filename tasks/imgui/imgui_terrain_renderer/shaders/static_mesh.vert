@@ -1,0 +1,44 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+
+#include "unpack_attributes.glsl"
+
+
+layout(location = 0) in vec4 vPosNorm;
+layout(location = 1) in vec4 vTexCoordAndTang;
+
+layout(std140, set = 0, binding = 1) uniform Constants
+{
+  mat4 viewProj;
+} constants;
+
+layout(std430, set = 0, binding = 0) readonly buffer InstanceMatrices
+{
+  mat4 matrices[];
+} instanceMatrices;
+
+
+layout (location = 0 ) out VS_OUT
+{
+  vec3 wPos;
+  vec3 wNorm;
+  vec3 wTangent;
+  vec2 texCoord;
+} vOut;
+
+out gl_PerVertex { vec4 gl_Position; };
+
+void main(void)
+{
+  mat4 mModel = instanceMatrices.matrices[gl_InstanceIndex];
+
+  const vec4 wNorm = vec4(decode_normal(floatBitsToInt(vPosNorm.w)),     0.0f);
+  const vec4 wTang = vec4(decode_normal(floatBitsToInt(vTexCoordAndTang.z)), 0.0f);
+
+  vOut.wPos   = (mModel * vec4(vPosNorm.xyz, 1.0f)).xyz;
+  vOut.wNorm  = normalize(mat3(transpose(inverse(mModel))) * wNorm.xyz);
+  vOut.wTangent = normalize(mat3(transpose(inverse(mModel))) * wTang.xyz);
+  vOut.texCoord = vTexCoordAndTang.xy;
+
+  gl_Position   = constants.viewProj * vec4(vOut.wPos, 1.0);
+}
