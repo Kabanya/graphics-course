@@ -5,6 +5,7 @@
 #include <etna/RenderTargetStates.hpp>
 #include <etna/Profiling.hpp>
 #include <glm/ext.hpp>
+#include <imgui.h>
 
 WorldRenderer::WorldRenderer()
   : sceneMgr{std::make_unique<SceneManager>()}
@@ -531,3 +532,18 @@ void WorldRenderer::createTerrainMap(vk::CommandBuffer cmd_buf)
   etna::flush_barriers(cmd_buf);
 }
 
+void WorldRenderer::drawGui()
+{
+  ImGui::Begin("Simple render settings");
+
+
+  ImGui::Text(
+    "Application average %.3f ms/frame (%.1f FPS)",
+    1000.0f / ImGui::GetIO().Framerate,
+    ImGui::GetIO().Framerate);
+
+  ImGui::NewLine();
+
+  ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Press 'B' to recompile and reload shaders");
+  ImGui::End();
+}
