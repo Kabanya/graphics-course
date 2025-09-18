@@ -1,0 +1,94 @@
+#pragma once
+
+#include <etna/Image.hpp>
+#include <etna/Sampler.hpp>
+#include <etna/Buffer.hpp>
+#include <etna/GraphicsPipeline.hpp>
+#include <etna/ComputePipeline.hpp>
+#include <etna/DescriptorSet.hpp>
+#include <glm/glm.hpp>
+
+#include "scene/SceneManager.hpp"
+#include "wsi/Keyboard.hpp"
+
+#include "FramePacket.hpp"
+
+struct InstanceGroup
+{
+  uint32_t meshIdx;
+  uint32_t firstInstance;
+  uint32_t instanceCount;
+};
+
+class WorldRenderer
+{
+public:
+  explicit WorldRenderer();
+
+  void loadScene(std::filesystem::path path);
+
+  void loadShaders();
+  void allocateResources(glm::uvec2 swapchain_resolution);
+  void setupPipelines(vk::Format swapchain_format);
+
+  void debugInput(const Keyboard& kb);
+  void update(const FramePacket& packet);
+  void drawGui();
+  void renderWorld(
+    vk::CommandBuffer cmd_buf, vk::Image target_image, vk::ImageView target_image_view);
+
+private:
+  void renderScene(
+    vk::CommandBuffer cmd_buf, vk::PipelineLayout pipeline_layout);
+  void createTerrainMap(vk::CommandBuffer cmd_buf);
+  void renderTerrain(vk::CommandBuffer cmd_buf);
+
+  bool isVisibleBoundingBox(const glm::vec3& min, const glm::vec3& max, const glm::mat4& mvp) const;
+
+private:
+  std::unique_ptr<SceneManager> sceneMgr;
+
+  etna::Image mainViewDepth;
+  etna::Image perlinTerrainImage;
+  etna::Image normalMapTerrainImage;
+  etna::Buffer instanceMatricesBuffer;
+  etna::Buffer constants;
+
+  void* persistentMapping = nullptr;
+  uint32_t maxInstances = 0;
+
+  std::vector<InstanceGroup> instanceGroups;
+  std::vector<glm::mat4> instanceMatrices;
+
+  glm::mat4x4 worldViewProj;
+  glm::vec3 camView;
+  float nearPlane;
+  float farPlane;
+
+  etna::GraphicsPipeline staticMeshPipeline{};
+  etna::ComputePipeline perlinPipeline{};
+  etna::ComputePipeline normalPipeline{};
+  etna::GraphicsPipeline terrainPipeline{};
+
+  struct WorldRendererConstants
+  {
+    glm::mat4 viewProj;
+    glm::vec4 camView;
+    int enableTessellation;
+  };
+
+  etna::Sampler defaultSampler;
+
+  glm::uvec2 resolution;
+
+  bool enableFrustumCulling = false;
+  bool enableTessellation = true;
+  static constexpr std::uint32_t TERRAIN_TEXTURE_SIZE_WIDTH  = 4096;
+  static constexpr std::uint32_t TERRAIN_TEXTURE_SIZE_HEIGHT = 4096;
+  static constexpr std::uint32_t COMPUTE_WORKGROUP_SIZE = 32;
+  static constexpr std::uint32_t PATCH_SUBDIVISION = 8;
+  static constexpr std::uint32_t GROUP_COUNT_X =
+    (TERRAIN_TEXTURE_SIZE_WIDTH + COMPUTE_WORKGROUP_SIZE - 1) / COMPUTE_WORKGROUP_SIZE;
+  static constexpr std::uint32_t GROUP_COUNT_Y =
+    (TERRAIN_TEXTURE_SIZE_HEIGHT + COMPUTE_WORKGROUP_SIZE - 1) / COMPUTE_WORKGROUP_SIZE;
+};

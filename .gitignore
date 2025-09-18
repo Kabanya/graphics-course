@@ -1,6 +1,6 @@
 bin
 out
-build
+**build**
 external
 .vs
 .cache
