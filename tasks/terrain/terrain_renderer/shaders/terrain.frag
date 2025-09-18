@@ -4,46 +4,30 @@
 
 
 layout(location = 0) out vec4 out_fragColor;
-layout(binding = 2) uniform sampler2D normalMap;
+layout(binding = 1) uniform sampler2D normalMapTerrainImage;
 
 
 layout(location = 0) in VS_OUT
 {
   vec3 wPos;
   vec2 texCoord;
-  float tessLevel;
 } surf;
 
 void main()
 {
-  const vec3 sunDirection = normalize(vec3(0.4, 0.7, 0.6));
-  const vec3 sunColor = vec3(1.0, 0.98, 0.92) * 0.7;
-  const vec3 skyColor = vec3(0.6, 0.8, 1.0) * 0.25;
-  const vec3 warmAmbient = vec3(0.7, 0.8, 0.6) * 0.18;
+  const vec3 wLightPos = vec3(50, 10, 255);
+  const vec3 lightColor = vec3(1.0f, 1.0f, 1.0f);
+  const vec3 wNorm = normalize(texture(normalMapTerrainImage, surf.texCoord).xyz * 2.0 - 1.0);
+  const vec3 surfaceColor = vec3(0.4, 0.8, 0.2);
 
-  vec3 wNorm = texture(normalMap, surf.texCoord).xyz * 2.0 - 1.0;
-  wNorm = normalize(wNorm);
+  const vec3 lightDir = normalize(wLightPos - surf.wPos);
+  const vec3 viewDir = normalize(-surf.wPos);
+  const vec3 halfDir = normalize(lightDir + viewDir);
 
-  float tessNormalized = clamp(surf.tessLevel * 10.0, 0.0, 1.0);
-  vec3 tessColor = mix(vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0), tessNormalized);
+  const vec3 diffuse = max(dot(wNorm, lightDir), 0.0f) * lightColor;
+  const vec3 specular = pow(max(dot(wNorm, halfDir), 0.0f), 128.0f) * lightColor;
+  const vec3 ambient = vec3(0.1, 0.1, 0.1);
 
-  vec3 surfaceColor = mix(vec3(0.32, 0.72, 0.22), tessColor, 0.7);
-
-  float NdotL = clamp(dot(wNorm, sunDirection), 0.0, 1.0);
-  NdotL = pow(NdotL, 1.1);
-  vec3 diffuse = NdotL * sunColor;
-
-  float skyFactor = wNorm.y * 0.5 + 0.5;
-  vec3 skyLight = skyColor * skyFactor;
-
-  vec3 ambient = warmAmbient + skyLight;
-
-  float rimFactor = 1.0 - max(dot(wNorm, normalize(-surf.wPos)), 0.0);
-  rimFactor = pow(rimFactor, 2.5) * 0.12;
-  vec3 rimLight = rimFactor * vec3(0.8, 0.9, 1.0);
-
-  vec3 finalColor = (diffuse + ambient + rimLight) * surfaceColor;
-
-  out_fragColor.rgb = finalColor;
+  out_fragColor.rgb = (diffuse + specular + ambient) * surfaceColor;
   out_fragColor.a = 1.0f;
 }

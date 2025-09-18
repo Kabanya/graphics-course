@@ -6,7 +6,7 @@ layout(binding = 0, r32f) restrict readonly uniform image2D heightMap;
 layout(binding = 1, rgba8) restrict writeonly uniform image2D normal;
 
 const float zScale = 200.0;
-const float pixSize = 1/4.0;
+const float pixelSize = 30./1.;
 
 vec3 calcNorm(ivec2 texCoord)
 {
@@ -15,7 +15,7 @@ vec3 calcNorm(ivec2 texCoord)
   float up = imageLoad(heightMap, texCoord + ivec2(0, 1)).x * zScale;
   float down = imageLoad(heightMap, texCoord + ivec2(0, -1)).x * zScale;
 
-  return normalize(vec3(right - left, 2.0 * pixSize, up - down));
+  return normalize(vec3(right - left, 2.0 * pixelSize, up - down));
 }
 
 void main()
@@ -23,5 +23,5 @@ void main()
   ivec2 idxy = ivec2(gl_GlobalInvocationID.xy);
   idxy = clamp(idxy, ivec2(1, 1), ivec2(4094, 4094));
   vec3 res = calcNorm(idxy);
-  imageStore(normal, idxy, vec4(res, 1));
+  imageStore(normal, idxy, vec4(res*0.5+0.5, 1));
 }

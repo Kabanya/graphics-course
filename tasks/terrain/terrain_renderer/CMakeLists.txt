@@ -10,12 +10,12 @@ target_link_libraries(terrain_renderer
   PRIVATE glfw etna glm::glm wsi gui scene render_utils)
 
 target_add_shaders(terrain_renderer
-  shaders/perlin_terrain.comp
   shaders/static_mesh.frag
   shaders/static_mesh.vert
+  shaders/terrain_normal.comp
+  shaders/terrain_perlin.comp
   shaders/terrain.tesc
   shaders/terrain.tese
   shaders/terrain.frag
-  shaders/terrain_normal.comp
   shaders/quad.vert
 )

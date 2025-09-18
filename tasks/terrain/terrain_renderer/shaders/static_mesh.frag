@@ -2,6 +2,7 @@
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_GOOGLE_include_directive : require
 
+
 layout(location = 0) out vec4 out_fragColor;
 
 layout(location = 0) in VS_OUT
@@ -25,7 +26,6 @@ void main()
   float lightFactor = smoothstep(-0.6, 1.0, NdotL);
   vec3 diffuse = lightFactor * lightColor;
 
-  // Hemisphere ambient lighting
   float skyFactor = (surf.wNorm.y + 1.0) * 0.5;
   vec3 skyColor = vec3(0.4, 0.6, 0.8);
   vec3 groundColor = vec3(0.1, 0.05, 0.03);

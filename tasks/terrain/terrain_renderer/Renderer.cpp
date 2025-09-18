@@ -22,6 +22,7 @@ void Renderer::initVulkan(std::span<const char*> instance_extensions)
   std::vector<const char*> deviceExtensions;
 
   deviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+  // deviceExtensions.push_back(VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME);
 
   vk::PhysicalDeviceFeatures features{};
   features.tessellationShader = VK_TRUE;

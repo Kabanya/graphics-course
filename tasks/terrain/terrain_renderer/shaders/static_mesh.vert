@@ -1,5 +1,4 @@
 #version 450
-#extension GL_ARB_separate_shader_objects : enable
 #extension GL_GOOGLE_include_directive : require
 
 #include "unpack_attributes.glsl"
@@ -8,10 +7,10 @@
 layout(location = 0) in vec4 vPosNorm;
 layout(location = 1) in vec4 vTexCoordAndTang;
 
-layout(push_constant) uniform params_t
+layout(std140, set = 0, binding = 1) uniform Constants
 {
   mat4 viewProj;
-} params;
+} constants;
 
 layout(std430, set = 0, binding = 0) readonly buffer InstanceMatrices
 {
@@ -41,5 +40,5 @@ void main(void)
   vOut.wTangent = normalize(mat3(transpose(inverse(mModel))) * wTang.xyz);
   vOut.texCoord = vTexCoordAndTang.xy;
 
-  gl_Position   = params.viewProj * vec4(vOut.wPos, 1.0);
+  gl_Position   = constants.viewProj * vec4(vOut.wPos, 1.0);
 }
