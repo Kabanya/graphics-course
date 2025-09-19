@@ -10,6 +10,8 @@
 WorldRenderer::WorldRenderer()
   : sceneMgr{std::make_unique<SceneManager>()}
 {
+  groupCountX = (terrainTextureSizeWidth + computeWorkgroupSize - 1) / computeWorkgroupSize;
+  groupCountY = (terrainTextureSizeHeight + computeWorkgroupSize - 1) / computeWorkgroupSize;
 }
 
 void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
@@ -57,13 +59,13 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
   persistentMapping = instanceMatricesBuffer.map();
 
   perlinTerrainImage = ctx.createImage(etna::Image::CreateInfo{
-    .extent = vk::Extent3D{TERRAIN_TEXTURE_SIZE_WIDTH, TERRAIN_TEXTURE_SIZE_HEIGHT, 1},
+    .extent = vk::Extent3D{terrainTextureSizeWidth, terrainTextureSizeHeight, 1},
     .name = "perlin_noise",
     .format = vk::Format::eR32Sfloat,
     .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
 
   normalMapTerrainImage = ctx.createImage(etna::Image::CreateInfo{
-    .extent = vk::Extent3D{TERRAIN_TEXTURE_SIZE_WIDTH, TERRAIN_TEXTURE_SIZE_HEIGHT, 1},
+    .extent = vk::Extent3D{terrainTextureSizeWidth, terrainTextureSizeHeight, 1},
     .name = "normal_map_terrain",
     .format = vk::Format::eR32G32B32A32Sfloat,
     .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
@@ -455,7 +457,7 @@ void WorldRenderer::renderTerrain(vk::CommandBuffer cmd_buf)
   cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, terrainPipeline.getVkPipeline());
   cmd_buf.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout, 0, 1, &vkSet, 0, nullptr);
 
-  cmd_buf.draw(4, (TERRAIN_TEXTURE_SIZE_WIDTH * TERRAIN_TEXTURE_SIZE_HEIGHT) / (128 * 128), 0, 0);
+  cmd_buf.draw(4, (terrainTextureSizeWidth * terrainTextureSizeHeight) / (computeWorkgroupSize * computeWorkgroupSize * 16), 0, 0);
 }
 
 void WorldRenderer::createTerrainMap(vk::CommandBuffer cmd_buf)
@@ -494,7 +496,7 @@ void WorldRenderer::createTerrainMap(vk::CommandBuffer cmd_buf)
       0,
       nullptr);
 
-    cmd_buf.dispatch(4096 / 32, 4096 / 32, 1);
+    cmd_buf.dispatch(terrainTextureSizeWidth / computeWorkgroupSize, terrainTextureSizeHeight / computeWorkgroupSize, 1);
   }
 
   etna::set_state(
@@ -539,7 +541,7 @@ void WorldRenderer::createTerrainMap(vk::CommandBuffer cmd_buf)
       0,
       nullptr);
 
-    cmd_buf.dispatch(GROUP_COUNT_X, GROUP_COUNT_Y, 1);
+    cmd_buf.dispatch(groupCountX, groupCountY, 1);
   }
 
   etna::set_state(
@@ -596,6 +598,15 @@ void WorldRenderer::drawGui()
     float pos[3]{uniformParams.lightPos.x, uniformParams.lightPos.y, uniformParams.lightPos.z};
     ImGui::SliderFloat3("Light source position", pos, -10.f, 10.f);
     uniformParams.lightPos = {pos[0], pos[1], pos[2]};
+
+    ImGui::InputInt("Terrain Texture Width", (int*)&terrainTextureSizeWidth);
+    ImGui::InputInt("Terrain Texture Height", (int*)&terrainTextureSizeHeight);
+    ImGui::InputInt("Compute Workgroup Size", (int*)&computeWorkgroupSize);
+    ImGui::InputInt("Patch Subdivision", (int*)&patchSubdivision);
+    groupCountX = (terrainTextureSizeWidth + computeWorkgroupSize - 1) / computeWorkgroupSize;
+    groupCountY = (terrainTextureSizeHeight + computeWorkgroupSize - 1) / computeWorkgroupSize;
+    ImGui::Text("Group Count X: %u", groupCountX);
+    ImGui::Text("Group Count Y: %u", groupCountY);
 
     ImGui::End();
   }

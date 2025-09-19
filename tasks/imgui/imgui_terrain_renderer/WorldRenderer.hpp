@@ -43,6 +43,7 @@ private:
     vk::CommandBuffer cmd_buf, vk::PipelineLayout pipeline_layout);
   void createTerrainMap(vk::CommandBuffer cmd_buf);
   void renderTerrain(vk::CommandBuffer cmd_buf);
+  void reallocateTerrainResources();
 
   bool isVisibleBoundingBox(const glm::vec3& min, const glm::vec3& max, const glm::mat4& mvp) const;
 
@@ -98,12 +99,10 @@ private:
   bool showRenderSettings     = true;
   bool showPerformanceInfo    = true;
   bool showTerrainSettings    = true;
-  static constexpr std::uint32_t TERRAIN_TEXTURE_SIZE_WIDTH  = 4096;
-  static constexpr std::uint32_t TERRAIN_TEXTURE_SIZE_HEIGHT = 4096;
-  static constexpr std::uint32_t COMPUTE_WORKGROUP_SIZE = 32;
-  static constexpr std::uint32_t PATCH_SUBDIVISION = 8;
-  static constexpr std::uint32_t GROUP_COUNT_X =
-    (TERRAIN_TEXTURE_SIZE_WIDTH + COMPUTE_WORKGROUP_SIZE - 1) / COMPUTE_WORKGROUP_SIZE;
-  static constexpr std::uint32_t GROUP_COUNT_Y =
-    (TERRAIN_TEXTURE_SIZE_HEIGHT + COMPUTE_WORKGROUP_SIZE - 1) / COMPUTE_WORKGROUP_SIZE;
+  std::uint32_t terrainTextureSizeWidth  = 4096;
+  std::uint32_t terrainTextureSizeHeight = 4096;
+  std::uint32_t computeWorkgroupSize = 32;
+  std::uint32_t patchSubdivision = 8;
+  std::uint32_t groupCountX;
+  std::uint32_t groupCountY;
 };
