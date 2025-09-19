@@ -1,8 +1,13 @@
 #version 450
-#define OCTAVES 10
 
 layout(local_size_x = 32, local_size_y = 32) in;
 layout(binding = 0, r32f) restrict writeonly uniform image2D resultImage;
+layout(binding = 1, std430) restrict readonly buffer PerlinParamsBuffer {
+    int octaves;
+    float amplitude;
+    float frequencyMultiplier;
+    float scale;
+} perlinParams;
 
 vec2 hash22(vec2 p) {
   p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
@@ -34,15 +39,15 @@ float gradientNoise(vec2 p) {
 
 float fbm(vec2 p) {
   float value = 0.0;
-  float amplitude = 0.5;
+  float amplitude = perlinParams.amplitude;
   float frequency = 1.0;
   float maxValue = 0.0;
 
-  for (int i = 0; i < OCTAVES; i++) {
+  for (int i = 0; i < perlinParams.octaves; i++) {
     value += amplitude * gradientNoise(p * frequency);
     maxValue += amplitude;
     amplitude *= 0.5;
-    frequency *= 2.0;
+    frequency *= perlinParams.frequencyMultiplier;
   }
 
   return value / maxValue;
@@ -54,7 +59,7 @@ void main() {
   if (idxy.x >= 4096 || idxy.y >= 4096) return;
   vec2 st = vec2(idxy) / 4096.0;
 
-  float noise = fbm(st * 8.0) * 0.5 + 0.5;
+  float noise = fbm(st * perlinParams.scale) * 0.5 + 0.5;
   float result = noise + 0.5;
   imageStore(resultImage, ivec2(idxy), vec4(result));
 }

@@ -4,6 +4,14 @@
 
 #include "cpp_glsl_compat.h"
 
+struct PerlinParams
+{
+  shader_uint octaves;
+  shader_float amplitude;
+  shader_float frequencyMultiplier;
+  shader_float scale;
+};
+
 struct UniformParams
 {
   shader_mat4 lightMatrix;

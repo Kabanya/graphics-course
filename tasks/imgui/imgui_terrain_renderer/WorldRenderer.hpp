@@ -11,6 +11,7 @@
 #include "shaders/UniformParams.h"
 #include "scene/SceneManager.hpp"
 #include "wsi/Keyboard.hpp"
+#include "render_utils/QuadRenderer.hpp"
 
 #include "FramePacket.hpp"
 
@@ -43,6 +44,8 @@ private:
     vk::CommandBuffer cmd_buf, vk::PipelineLayout pipeline_layout);
   void createTerrainMap(vk::CommandBuffer cmd_buf);
   void renderTerrain(vk::CommandBuffer cmd_buf);
+  void reallocateTerrainResources();
+  void regenerateTerrain();
 
   bool isVisibleBoundingBox(const glm::vec3& min, const glm::vec3& max, const glm::mat4& mvp) const;
 
@@ -55,9 +58,11 @@ private:
   etna::Buffer instanceMatricesBuffer;
   etna::Buffer constants;
   etna::Buffer uniformParamsBuffer;
+  etna::Buffer perlinValuesBuffer;
 
   void* persistentMapping = nullptr;
   void* uniformMapping = nullptr;
+  void* perlinValuesMapping = nullptr;
   uint32_t maxInstances = 0;
 
   std::vector<InstanceGroup> instanceGroups;
@@ -73,6 +78,8 @@ private:
   etna::ComputePipeline normalPipeline{};
   etna::GraphicsPipeline terrainPipeline{};
 
+  std::unique_ptr<QuadRenderer> quadRenderer;
+
   struct WorldRendererConstants{
     glm::mat4 viewProj;
     glm::vec4 camView;
@@ -84,6 +91,13 @@ private:
     .lightPos = {},
     .time = {},
     .baseColor = {0.9f, 0.92f, 1.0f},
+  };
+
+  PerlinParams perlinParams{
+    .octaves = 10u,
+    .amplitude = 0.5f,
+    .frequencyMultiplier = 2.0f,
+    .scale = 8.0f,
   };
 
   etna::Sampler defaultSampler;
@@ -98,12 +112,12 @@ private:
   bool showRenderSettings     = true;
   bool showPerformanceInfo    = true;
   bool showTerrainSettings    = true;
-  static constexpr std::uint32_t TERRAIN_TEXTURE_SIZE_WIDTH  = 4096;
-  static constexpr std::uint32_t TERRAIN_TEXTURE_SIZE_HEIGHT = 4096;
-  static constexpr std::uint32_t COMPUTE_WORKGROUP_SIZE = 32;
-  static constexpr std::uint32_t PATCH_SUBDIVISION = 8;
-  static constexpr std::uint32_t GROUP_COUNT_X =
-    (TERRAIN_TEXTURE_SIZE_WIDTH + COMPUTE_WORKGROUP_SIZE - 1) / COMPUTE_WORKGROUP_SIZE;
-  static constexpr std::uint32_t GROUP_COUNT_Y =
-    (TERRAIN_TEXTURE_SIZE_HEIGHT + COMPUTE_WORKGROUP_SIZE - 1) / COMPUTE_WORKGROUP_SIZE;
+  bool drawDebugTerrainQuad   = false;
+
+  std::uint32_t terrainTextureSizeWidth  = 4096;
+  std::uint32_t terrainTextureSizeHeight = 4096;
+  std::uint32_t computeWorkgroupSize = 32;
+  std::uint32_t patchSubdivision = 8;
+  std::uint32_t groupCountX;
+  std::uint32_t groupCountY;
 };

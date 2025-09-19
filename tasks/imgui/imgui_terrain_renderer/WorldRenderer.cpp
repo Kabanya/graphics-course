@@ -10,6 +10,8 @@
 WorldRenderer::WorldRenderer()
   : sceneMgr{std::make_unique<SceneManager>()}
 {
+  groupCountX = (terrainTextureSizeWidth + computeWorkgroupSize - 1) / computeWorkgroupSize;
+  groupCountY = (terrainTextureSizeHeight + computeWorkgroupSize - 1) / computeWorkgroupSize;
 }
 
 void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
@@ -45,6 +47,17 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
   });
   uniformMapping = uniformParamsBuffer.map();
 
+  perlinValuesBuffer = ctx.createBuffer(etna::Buffer::CreateInfo{
+    .size = sizeof(PerlinParams),
+    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+    .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+    .name = "perlin_values",
+  });
+  perlinValuesMapping = perlinValuesBuffer.map();
+
+  std::memcpy(perlinValuesMapping, &perlinParams, sizeof(PerlinParams));
+
   maxInstances = 1;
   instanceMatricesBuffer = ctx.createBuffer(etna::Buffer::CreateInfo
   {
@@ -57,13 +70,13 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
   persistentMapping = instanceMatricesBuffer.map();
 
   perlinTerrainImage = ctx.createImage(etna::Image::CreateInfo{
-    .extent = vk::Extent3D{TERRAIN_TEXTURE_SIZE_WIDTH, TERRAIN_TEXTURE_SIZE_HEIGHT, 1},
+    .extent = vk::Extent3D{terrainTextureSizeWidth, terrainTextureSizeHeight, 1},
     .name = "perlin_noise",
     .format = vk::Format::eR32Sfloat,
     .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
 
   normalMapTerrainImage = ctx.createImage(etna::Image::CreateInfo{
-    .extent = vk::Extent3D{TERRAIN_TEXTURE_SIZE_WIDTH, TERRAIN_TEXTURE_SIZE_HEIGHT, 1},
+    .extent = vk::Extent3D{terrainTextureSizeWidth, terrainTextureSizeHeight, 1},
     .name = "normal_map_terrain",
     .format = vk::Format::eR32G32B32A32Sfloat,
     .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
@@ -127,6 +140,11 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
   };
 
   auto& pipelineManager = etna::get_context().getPipelineManager();
+
+  quadRenderer = std::make_unique<QuadRenderer>(QuadRenderer::CreateInfo{
+    .format = swapchain_format,
+    .rect = {{0, 0}, {512, 512}},
+  });
 
   staticMeshPipeline = {};
   staticMeshPipeline = pipelineManager.createGraphicsPipeline(
@@ -220,6 +238,10 @@ void WorldRenderer::debugInput(const Keyboard& kb)
     showTerrainSettings = !allOpen;
     printf("All windows %s\n", allOpen ? "hidden" : "shown");
   }
+  if (kb[KeyboardKey::kQ] == ButtonState::Falling) {
+    drawDebugTerrainQuad = !drawDebugTerrainQuad;
+    printf("Debug Terrain Quad: %s\n", drawDebugTerrainQuad ? "ON" : "OFF");
+  }
 }
 
 void WorldRenderer::update(const FramePacket& packet)
@@ -234,6 +256,8 @@ void WorldRenderer::update(const FramePacket& packet)
   }
 
   std::memcpy(uniformMapping, &uniformParams, sizeof(UniformParams));
+
+  std::memcpy(perlinValuesMapping, &perlinParams, sizeof(PerlinParams));
 
   WorldRendererConstants worldConstants{
     .viewProj = worldViewProj,
@@ -432,6 +456,9 @@ void WorldRenderer::renderWorld(
       {.image = mainViewDepth.get(), .view = mainViewDepth.getView({}), .loadOp = vk::AttachmentLoadOp::eLoad});
       renderTerrain(cmd_buf);
     }
+
+  if (drawDebugTerrainQuad)
+    quadRenderer->render(cmd_buf, target_image, target_image_view, perlinTerrainImage, defaultSampler);
 }
 
 void WorldRenderer::renderTerrain(vk::CommandBuffer cmd_buf)
@@ -455,7 +482,18 @@ void WorldRenderer::renderTerrain(vk::CommandBuffer cmd_buf)
   cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, terrainPipeline.getVkPipeline());
   cmd_buf.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout, 0, 1, &vkSet, 0, nullptr);
 
-  cmd_buf.draw(4, (TERRAIN_TEXTURE_SIZE_WIDTH * TERRAIN_TEXTURE_SIZE_HEIGHT) / (128 * 128), 0, 0);
+  cmd_buf.draw(4, (terrainTextureSizeWidth * terrainTextureSizeHeight) / (computeWorkgroupSize * computeWorkgroupSize * 16), 0, 0);
+}
+
+void WorldRenderer::regenerateTerrain()
+{
+  auto& ctx = etna::get_context();
+  auto cmdManager = ctx.createOneShotCmdMgr();
+  auto cmdBuf = cmdManager->start();
+  ETNA_CHECK_VK_RESULT(cmdBuf.begin(vk::CommandBufferBeginInfo{}));
+  createTerrainMap(cmdBuf);
+  ETNA_CHECK_VK_RESULT(cmdBuf.end());
+  cmdManager->submitAndWait(cmdBuf);
 }
 
 void WorldRenderer::createTerrainMap(vk::CommandBuffer cmd_buf)
@@ -480,6 +518,7 @@ void WorldRenderer::createTerrainMap(vk::CommandBuffer cmd_buf)
       cmd_buf,
       {
         etna::Binding{0, binding},
+        etna::Binding{1, perlinValuesBuffer.genBinding()},
       });
 
     vk::DescriptorSet vkSet = set.getVkSet();
@@ -494,7 +533,7 @@ void WorldRenderer::createTerrainMap(vk::CommandBuffer cmd_buf)
       0,
       nullptr);
 
-    cmd_buf.dispatch(4096 / 32, 4096 / 32, 1);
+    cmd_buf.dispatch(terrainTextureSizeWidth / computeWorkgroupSize, terrainTextureSizeHeight / computeWorkgroupSize, 1);
   }
 
   etna::set_state(
@@ -539,7 +578,7 @@ void WorldRenderer::createTerrainMap(vk::CommandBuffer cmd_buf)
       0,
       nullptr);
 
-    cmd_buf.dispatch(GROUP_COUNT_X, GROUP_COUNT_Y, 1);
+    cmd_buf.dispatch(groupCountX, groupCountY, 1);
   }
 
   etna::set_state(
@@ -588,6 +627,7 @@ void WorldRenderer::drawGui()
   if (showTerrainSettings)
   {
     ImGui::Begin("Terrain Settings", &showTerrainSettings);
+    ImGui::Checkbox("Draw Debug Terrain Quad", &drawDebugTerrainQuad);
     float color[3]{uniformParams.baseColor.r, uniformParams.baseColor.g, uniformParams.baseColor.b};
     ImGui::ColorEdit3(
       "Terrain base color", color, ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoInputs);
@@ -596,6 +636,26 @@ void WorldRenderer::drawGui()
     float pos[3]{uniformParams.lightPos.x, uniformParams.lightPos.y, uniformParams.lightPos.z};
     ImGui::SliderFloat3("Light source position", pos, -10.f, 10.f);
     uniformParams.lightPos = {pos[0], pos[1], pos[2]};
+
+    ImGui::InputInt("Terrain Texture Width", (int*)&terrainTextureSizeWidth);
+    ImGui::InputInt("Terrain Texture Height", (int*)&terrainTextureSizeHeight);
+    ImGui::InputInt("Compute Workgroup Size", (int*)&computeWorkgroupSize);
+    ImGui::InputInt("Patch Subdivision", (int*)&patchSubdivision);
+    groupCountX = (terrainTextureSizeWidth + computeWorkgroupSize - 1) / computeWorkgroupSize;
+    groupCountY = (terrainTextureSizeHeight + computeWorkgroupSize - 1) / computeWorkgroupSize;
+    ImGui::Text("Group Count X: %u", groupCountX);
+    ImGui::Text("Group Count Y: %u", groupCountY);
+
+    ImGui::Separator();
+    ImGui::Text("Perlin Noise Parameters");
+    ImGui::SliderInt("Octaves", (int*)&perlinParams.octaves, 1, 20);
+    ImGui::SliderFloat("Amplitude", &perlinParams.amplitude, 0.0f, 1.0f);
+    ImGui::SliderFloat("Frequency Multiplier", &perlinParams.frequencyMultiplier, 1.0f, 4.0f);
+    ImGui::SliderFloat("Scale", &perlinParams.scale, 1.0f, 20.0f);
+
+    if (ImGui::Button("Regenerate Terrain")) {
+      regenerateTerrain();
+    }
 
     ImGui::End();
   }
