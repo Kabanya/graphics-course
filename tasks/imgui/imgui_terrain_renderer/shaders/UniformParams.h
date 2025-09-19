@@ -1,4 +1,3 @@
-// filepath: c:\Development\graphics-course\tasks\imgui\imgui_terrain_renderer\shaders\UniformParams.h
 #ifndef UNIFORM_PARAMS_H_INCLUDED
 #define UNIFORM_PARAMS_H_INCLUDED
 

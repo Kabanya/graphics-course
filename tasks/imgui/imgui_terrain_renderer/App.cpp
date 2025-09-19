@@ -52,10 +52,12 @@ void App::processInput(float dt)
   if (mainWindow->keyboard[KeyboardKey::kEscape] == ButtonState::Falling)
     mainWindow->askToClose();
 
+  float baseCamMoveSpeed = renderer->getCameraSpeed();
+
   if (is_held_down(mainWindow->keyboard[KeyboardKey::kLeftShift]))
-    camMoveSpeed = 250;
+    camMoveSpeed = baseCamMoveSpeed * 5;
   else
-    camMoveSpeed = 50;
+    camMoveSpeed = baseCamMoveSpeed;
 
   if (mainWindow->mouse[MouseButton::mbRight] == ButtonState::Rising)
     mainWindow->captureMouse = !mainWindow->captureMouse;
@@ -66,6 +68,7 @@ void App::processInput(float dt)
 
   renderer->debugInput(mainWindow->keyboard);
 }
+
 
 void App::drawFrame()
 {

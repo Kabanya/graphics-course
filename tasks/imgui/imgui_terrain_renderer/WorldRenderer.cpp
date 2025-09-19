@@ -224,12 +224,12 @@ void WorldRenderer::debugInput(const Keyboard& kb)
     printf("Tessellation: %s\n", enableTessellation ? "ON" : "OFF");
   }
   if (kb[KeyboardKey::k3] == ButtonState::Falling) {
-    enableTerrainRendering = !enableTerrainRendering;
-    printf("Terrain Rendering: %s\n", enableTerrainRendering ? "ON" : "OFF");
-  }
-  if (kb[KeyboardKey::k4] == ButtonState::Falling) {
     enableSceneRendering = !enableSceneRendering;
     printf("Avocados Rendering: %s\n", enableSceneRendering ? "ON" : "OFF");
+  }
+  if (kb[KeyboardKey::k4] == ButtonState::Falling) {
+    enableTerrainRendering = !enableTerrainRendering;
+    printf("Terrain Rendering: %s\n", enableTerrainRendering ? "ON" : "OFF");
   }
   if (kb[KeyboardKey::kZ] == ButtonState::Falling) {
     bool allOpen = showRenderSettings && showPerformanceInfo && showTerrainSettings;
@@ -372,6 +372,11 @@ void WorldRenderer::renderScene(
   if (!sceneMgr->getVertexBuffer() || instanceGroups.empty())
     return;
 
+  renderedInstances = 0;
+  for (const auto& group : instanceGroups) {
+    renderedInstances += group.instanceCount;
+  }
+
   cmd_buf.bindVertexBuffers(0, {sceneMgr->getVertexBuffer()}, {0});
   cmd_buf.bindIndexBuffer(sceneMgr->getIndexBuffer(), 0, vk::IndexType::eUint32);
 
@@ -432,6 +437,7 @@ void WorldRenderer::renderWorld(
   vk::CommandBuffer cmd_buf, vk::Image target_image, vk::ImageView target_image_view)
 {
   ETNA_PROFILE_GPU(cmd_buf, renderWorld);
+
   {
     ETNA_PROFILE_GPU(cmd_buf, renderForward);
 
@@ -441,11 +447,12 @@ void WorldRenderer::renderWorld(
       {{.image = target_image, .view = target_image_view}},
       {.image = mainViewDepth.get(), .view = mainViewDepth.getView({})});
 
-    cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, staticMeshPipeline.getVkPipeline());
+    if (enableSceneRendering) {
+      cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, staticMeshPipeline.getVkPipeline());
+      renderScene(cmd_buf, staticMeshPipeline.getVkPipelineLayout());
+    }
   }
-  if (enableSceneRendering) {
-    renderScene(cmd_buf, staticMeshPipeline.getVkPipelineLayout());
-  }
+
   if (enableTerrainRendering)
   {
     ETNA_PROFILE_GPU(cmd_buf, renderTerrain);
@@ -454,8 +461,10 @@ void WorldRenderer::renderWorld(
       {{0, 0}, {resolution.x, resolution.y}},
       {{.image = target_image, .view = target_image_view, .loadOp = vk::AttachmentLoadOp::eLoad}},
       {.image = mainViewDepth.get(), .view = mainViewDepth.getView({}), .loadOp = vk::AttachmentLoadOp::eLoad});
-      renderTerrain(cmd_buf);
-    }
+
+    cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, terrainPipeline.getVkPipeline());
+    renderTerrain(cmd_buf);
+  }
 
   if (drawDebugTerrainQuad)
     quadRenderer->render(cmd_buf, target_image, target_image_view, perlinTerrainImage, defaultSampler);
@@ -479,7 +488,6 @@ void WorldRenderer::renderTerrain(vk::CommandBuffer cmd_buf)
   auto vkSet = descSet.getVkSet();
   auto layout = terrainPipeline.getVkPipelineLayout();
 
-  cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, terrainPipeline.getVkPipeline());
   cmd_buf.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout, 0, 1, &vkSet, 0, nullptr);
 
   cmd_buf.draw(4, (terrainTextureSizeWidth * terrainTextureSizeHeight) / (computeWorkgroupSize * computeWorkgroupSize * 16), 0, 0);
@@ -599,6 +607,21 @@ void WorldRenderer::createTerrainMap(vk::CommandBuffer cmd_buf)
   etna::flush_barriers(cmd_buf);
 }
 
+float WorldRenderer::getCameraSpeed() const
+{
+  switch (cameraSpeedLevel)
+  {
+    case CameraSpeedLevel::Slow:
+      return 1.0f;
+    case CameraSpeedLevel::Middle:
+      return 25.0f;
+    case CameraSpeedLevel::Fast:
+      return 50.0f;
+    default:
+      return 50.0f;
+  }
+}
+
 void WorldRenderer::drawGui()
 {
   // 1. Performance & Info
@@ -609,18 +632,45 @@ void WorldRenderer::drawGui()
       "Application average %.3f ms/frame (%.1f FPS)",
       1000.0f / ImGui::GetIO().Framerate,
       ImGui::GetIO().Framerate);
+    ImGui::Text("Rendered Instances: %u", renderedInstances);
     ImGui::NewLine();
     ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Press 'B' to recompile and reload shaders");
+
+    ImGui::Separator();
+    ImGui::NewLine();
+    ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Controls:");
+    ImGui::BulletText("1: Toggle Frustum Culling");
+    ImGui::BulletText("2: Toggle Tessellation");
+    ImGui::BulletText("3: Toggle Avocados Rendering");
+    ImGui::BulletText("4: Toggle Terrain Rendering");
+    ImGui::BulletText("Z: Toggle all GUI windows");
+    ImGui::BulletText("Q: Toggle Debug Terrain Quad");
+    ImGui::BulletText("WASD: Move camera");
+    ImGui::BulletText("F/R: Move camera up/down");
+    ImGui::BulletText("Mouse: Rotate camera (hold right-click)");
+    ImGui::BulletText("Scroll: Zoom in/out");
+    ImGui::BulletText("Shift: Boost camera speed");
+    ImGui::BulletText("Escape: Close application");
+
     ImGui::End();
   }
-  // 2. Enable settings
+  // 2. General settings
   if (showRenderSettings)
   {
     ImGui::Begin("Render Settings", &showRenderSettings);
     ImGui::Checkbox("Enable Frustum Culling", &enableFrustumCulling);
     ImGui::Checkbox("Enable Tessellation", &enableTessellation);
-    ImGui::Checkbox("Enable Terrain Rendering", &enableTerrainRendering);
     ImGui::Checkbox("Enable Avocados Rendering", &enableSceneRendering);
+    ImGui::Checkbox("Enable Terrain Rendering", &enableTerrainRendering);
+
+    ImGui::Separator();
+    ImGui::Text("Camera Speed");
+    int currentSpeed = static_cast<int>(cameraSpeedLevel);
+    const char* speedItems[] = { "Slow", "Middle", "Fast" };
+    if (ImGui::Combo("##CameraSpeed", &currentSpeed, speedItems, IM_ARRAYSIZE(speedItems)))
+    {
+      cameraSpeedLevel = static_cast<CameraSpeedLevel>(currentSpeed);
+    }
     ImGui::End();
   }
   // 3. Terrain settings
@@ -645,17 +695,16 @@ void WorldRenderer::drawGui()
     groupCountY = (terrainTextureSizeHeight + computeWorkgroupSize - 1) / computeWorkgroupSize;
     ImGui::Text("Group Count X: %u", groupCountX);
     ImGui::Text("Group Count Y: %u", groupCountY);
-
     ImGui::Separator();
-    ImGui::Text("Perlin Noise Parameters");
+
+    ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Perlin Noise Parameters");
     ImGui::SliderInt("Octaves", (int*)&perlinParams.octaves, 1, 20);
     ImGui::SliderFloat("Amplitude", &perlinParams.amplitude, 0.0f, 1.0f);
     ImGui::SliderFloat("Frequency Multiplier", &perlinParams.frequencyMultiplier, 1.0f, 4.0f);
     ImGui::SliderFloat("Scale", &perlinParams.scale, 1.0f, 20.0f);
 
-    if (ImGui::Button("Regenerate Terrain")) {
+    if (ImGui::Button("Regenerate Terrain"))
       regenerateTerrain();
-    }
 
     ImGui::End();
   }

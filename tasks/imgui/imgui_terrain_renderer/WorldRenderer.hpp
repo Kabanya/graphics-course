@@ -22,6 +22,13 @@ struct InstanceGroup
   uint32_t instanceCount;
 };
 
+enum class CameraSpeedLevel
+{
+  Slow = 0,
+  Middle = 1,
+  Fast = 2
+};
+
 class WorldRenderer
 {
 public:
@@ -38,6 +45,8 @@ public:
   void drawGui();
   void renderWorld(
     vk::CommandBuffer cmd_buf, vk::Image target_image, vk::ImageView target_image_view);
+
+  float getCameraSpeed() const;
 
 private:
   void renderScene(
@@ -114,10 +123,14 @@ private:
   bool showTerrainSettings    = true;
   bool drawDebugTerrainQuad   = false;
 
+  CameraSpeedLevel cameraSpeedLevel = CameraSpeedLevel::Fast;
+
   std::uint32_t terrainTextureSizeWidth  = 4096;
   std::uint32_t terrainTextureSizeHeight = 4096;
   std::uint32_t computeWorkgroupSize = 32;
   std::uint32_t patchSubdivision = 8;
   std::uint32_t groupCountX;
   std::uint32_t groupCountY;
+
+  uint32_t renderedInstances = 0;
 };
