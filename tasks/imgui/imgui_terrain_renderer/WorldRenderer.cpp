@@ -34,6 +34,16 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
     .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
     .name = "world_renderer_constants",
   });
+  // constants.map();
+
+  uniformParamsBuffer = ctx.createBuffer(etna::Buffer::CreateInfo{
+    .size = sizeof(UniformParams),
+    .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+    .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+    .name = "uniform_params",
+  });
+  uniformMapping = uniformParamsBuffer.map();
 
   maxInstances = 1;
   instanceMatricesBuffer = ctx.createBuffer(etna::Buffer::CreateInfo
@@ -220,10 +230,10 @@ void WorldRenderer::update(const FramePacket& packet)
   {
     const float aspect = float(resolution.x) / float(resolution.y);
     worldViewProj = packet.mainCam.projTm(aspect) * packet.mainCam.viewTm();
-    nearPlane = packet.mainCam.zNear;
-    farPlane = packet.mainCam.zFar;
     camView = packet.mainCam.position;
   }
+
+  std::memcpy(uniformMapping, &uniformParams, sizeof(UniformParams));
 
   WorldRendererConstants worldConstants{
     .viewProj = worldViewProj,
@@ -437,6 +447,7 @@ void WorldRenderer::renderTerrain(vk::CommandBuffer cmd_buf)
       etna::Binding{0, perlinBind},
       etna::Binding{1, normalBind},
       etna::Binding{2, constants.genBinding()},
+      etna::Binding{3, uniformParamsBuffer.genBinding()},
     });
   auto vkSet = descSet.getVkSet();
   auto layout = terrainPipeline.getVkPipelineLayout();
@@ -579,7 +590,7 @@ void WorldRenderer::drawGui()
     ImGui::Begin("Terrain Settings", &showTerrainSettings);
     float color[3]{uniformParams.baseColor.r, uniformParams.baseColor.g, uniformParams.baseColor.b};
     ImGui::ColorEdit3(
-      "Meshes base color", color, ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoInputs);
+      "Terrain base color", color, ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoInputs);
     uniformParams.baseColor = {color[0], color[1], color[2]};
 
     float pos[3]{uniformParams.lightPos.x, uniformParams.lightPos.y, uniformParams.lightPos.z};

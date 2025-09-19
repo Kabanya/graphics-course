@@ -54,8 +54,10 @@ private:
   etna::Image normalMapTerrainImage;
   etna::Buffer instanceMatricesBuffer;
   etna::Buffer constants;
+  etna::Buffer uniformParamsBuffer;
 
   void* persistentMapping = nullptr;
+  void* uniformMapping = nullptr;
   uint32_t maxInstances = 0;
 
   std::vector<InstanceGroup> instanceGroups;
@@ -71,8 +73,7 @@ private:
   etna::ComputePipeline normalPipeline{};
   etna::GraphicsPipeline terrainPipeline{};
 
-  struct WorldRendererConstants
-  {
+  struct WorldRendererConstants{
     glm::mat4 viewProj;
     glm::vec4 camView;
     int enableTessellation;
