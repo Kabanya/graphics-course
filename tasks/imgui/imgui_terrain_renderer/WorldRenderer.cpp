@@ -232,11 +232,8 @@ void WorldRenderer::debugInput(const Keyboard& kb)
     printf("Terrain Rendering: %s\n", enableTerrainRendering ? "ON" : "OFF");
   }
   if (kb[KeyboardKey::kZ] == ButtonState::Falling) {
-    bool allOpen = showRenderSettings && showPerformanceInfo && showTerrainSettings;
-    showRenderSettings = !allOpen;
-    showPerformanceInfo = !allOpen;
-    showTerrainSettings = !allOpen;
-    printf("All windows %s\n", allOpen ? "hidden" : "shown");
+    showTabs = !showTabs;
+    printf("GUI tabs %s\n", showTabs ? "shown" : "hidden");
   }
   if (kb[KeyboardKey::kQ] == ButtonState::Falling) {
     drawDebugTerrainQuad = !drawDebugTerrainQuad;
@@ -624,88 +621,104 @@ float WorldRenderer::getCameraSpeed() const
 
 void WorldRenderer::drawGui()
 {
-  // 1. Performance & Info
-  if (showPerformanceInfo)
+  if (showTabs)
   {
-    ImGui::Begin("Performance & Info", &showPerformanceInfo);
-    ImGui::Text(
-      "Application average %.3f ms/frame (%.1f FPS)",
-      1000.0f / ImGui::GetIO().Framerate,
-      ImGui::GetIO().Framerate);
-    ImGui::Text("Rendered Instances: %u", renderedInstances);
-    ImGui::NewLine();
-    ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Press 'B' to recompile and reload shaders");
-
-    ImGui::Separator();
-    ImGui::NewLine();
-    ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Controls:");
-    ImGui::BulletText("1: Toggle Frustum Culling");
-    ImGui::BulletText("2: Toggle Tessellation");
-    ImGui::BulletText("3: Toggle Avocados Rendering");
-    ImGui::BulletText("4: Toggle Terrain Rendering");
-    ImGui::BulletText("Z: Toggle all GUI windows");
-    ImGui::BulletText("Q: Toggle Debug Terrain Quad");
-    ImGui::BulletText("WASD: Move camera");
-    ImGui::BulletText("F/R: Move camera up/down");
-    ImGui::BulletText("Mouse: Rotate camera (hold right-click)");
-    ImGui::BulletText("Scroll: Zoom in/out");
-    ImGui::BulletText("Shift: Boost camera speed");
-    ImGui::BulletText("Escape: Close application");
-
-    ImGui::End();
-  }
-  // 2. General settings
-  if (showRenderSettings)
-  {
-    ImGui::Begin("Render Settings", &showRenderSettings);
-    ImGui::Checkbox("Enable Frustum Culling", &enableFrustumCulling);
-    ImGui::Checkbox("Enable Tessellation", &enableTessellation);
-    ImGui::Checkbox("Enable Avocados Rendering", &enableSceneRendering);
-    ImGui::Checkbox("Enable Terrain Rendering", &enableTerrainRendering);
-
-    ImGui::Separator();
-    ImGui::Text("Camera Speed");
-    int currentSpeed = static_cast<int>(cameraSpeedLevel);
-    const char* speedItems[] = { "Slow", "Middle", "Fast" };
-    if (ImGui::Combo("##CameraSpeed", &currentSpeed, speedItems, IM_ARRAYSIZE(speedItems)))
+    if (ImGui::Begin("Renderer Settings", &showRenderSettings))
     {
-      cameraSpeedLevel = static_cast<CameraSpeedLevel>(currentSpeed);
+      if (ImGui::BeginTabBar("SettingsTabs"))
+      {
+        if (ImGui::BeginTabItem("Performance"))
+        {
+          ImGui::Text(
+            "Application average %.3f ms/frame (%.1f FPS)",
+            1000.0f / ImGui::GetIO().Framerate,
+            ImGui::GetIO().Framerate);
+          ImGui::Text("Rendered Instances: %u", renderedInstances);
+          ImGui::EndTabItem();
+        }
+
+        if (ImGui::BeginTabItem("Render"))
+        {
+          ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Culling and Tessellation");
+          ImGui::Checkbox("Enable Frustum Culling", &enableFrustumCulling);
+          ImGui::Checkbox("Enable Tessellation", &enableTessellation);
+
+          ImGui::Separator();
+          ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Rendering Options");
+          ImGui::Checkbox("Enable Avocados Rendering", &enableSceneRendering);
+          ImGui::Checkbox("Enable Terrain Rendering", &enableTerrainRendering);
+
+          ImGui::Separator();
+          ImGui::Text("Camera Speed");
+          int currentSpeed = static_cast<int>(cameraSpeedLevel);
+          const char* speedItems[] = { "Slow", "Middle", "Fast" };
+          if (ImGui::Combo("##CameraSpeed", &currentSpeed, speedItems, IM_ARRAYSIZE(speedItems)))
+          {
+            cameraSpeedLevel = static_cast<CameraSpeedLevel>(currentSpeed);
+          }
+          ImGui::EndTabItem();
+        }
+
+        if (ImGui::BeginTabItem("Terrain"))
+        {
+          ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Terrain Parameters");
+          ImGui::Checkbox("Draw Debug Terrain Quad", &drawDebugTerrainQuad);
+          float color[3]{uniformParams.baseColor.r, uniformParams.baseColor.g, uniformParams.baseColor.b};
+          ImGui::ColorEdit3(
+            "Terrain base color", color, ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoInputs);
+          uniformParams.baseColor = {color[0], color[1], color[2]};
+
+          float pos[3]{uniformParams.lightPos.x, uniformParams.lightPos.y, uniformParams.lightPos.z};
+          ImGui::SliderFloat3("Light source position", pos, -10.f, 10.f);
+          uniformParams.lightPos = {pos[0], pos[1], pos[2]};
+
+          ImGui::InputInt("Terrain Texture Width", (int*)&terrainTextureSizeWidth);
+          ImGui::InputInt("Terrain Texture Height", (int*)&terrainTextureSizeHeight);
+          ImGui::InputInt("Compute Workgroup Size", (int*)&computeWorkgroupSize);
+          ImGui::InputInt("Patch Subdivision", (int*)&patchSubdivision);
+          groupCountX = (terrainTextureSizeWidth + computeWorkgroupSize - 1) / computeWorkgroupSize;
+          groupCountY = (terrainTextureSizeHeight + computeWorkgroupSize - 1) / computeWorkgroupSize;
+          ImGui::Text("Group Count X: %u", groupCountX);
+          ImGui::Text("Group Count Y: %u", groupCountY);
+          ImGui::Separator();
+
+          ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Perlin Noise Parameters");
+          ImGui::SliderInt("Octaves", (int*)&perlinParams.octaves, 1, 20);
+          ImGui::SliderFloat("Amplitude", &perlinParams.amplitude, 0.0f, 1.0f);
+          ImGui::SliderFloat("Frequency Multiplier", &perlinParams.frequencyMultiplier, 1.0f, 4.0f);
+          ImGui::SliderFloat("Scale", &perlinParams.scale, 1.0f, 20.0f);
+
+          if (ImGui::Button("Regenerate Terrain"))
+            regenerateTerrain();
+
+          ImGui::EndTabItem();
+        }
+
+        if (ImGui::BeginTabItem("Info"))
+        {
+          ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Press 'B' to recompile and reload shaders");
+
+          ImGui::Separator();
+          ImGui::NewLine();
+          ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Controls:");
+          ImGui::BulletText("1: Toggle Frustum Culling");
+          ImGui::BulletText("2: Toggle Tessellation");
+          ImGui::BulletText("3: Toggle Avocados Rendering");
+          ImGui::BulletText("4: Toggle Terrain Rendering");
+          ImGui::BulletText("Z: Toggle GUI tabs");
+          ImGui::BulletText("Q: Toggle Debug Terrain Quad");
+          ImGui::BulletText("WASD: Move camera");
+          ImGui::BulletText("F/R: Move camera up/down");
+          ImGui::BulletText("Mouse: Rotate camera (hold right-click)");
+          ImGui::BulletText("Scroll: Zoom in/out");
+          ImGui::BulletText("Shift: Boost camera speed");
+          ImGui::BulletText("Escape: Close application");
+          ImGui::EndTabItem();
+        }
+
+        ImGui::EndTabBar();
+      }
     }
-    ImGui::End();
-  }
-  // 3. Terrain settings
-  if (showTerrainSettings)
-  {
-    ImGui::Begin("Terrain Settings", &showTerrainSettings);
-    ImGui::Checkbox("Draw Debug Terrain Quad", &drawDebugTerrainQuad);
-    float color[3]{uniformParams.baseColor.r, uniformParams.baseColor.g, uniformParams.baseColor.b};
-    ImGui::ColorEdit3(
-      "Terrain base color", color, ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoInputs);
-    uniformParams.baseColor = {color[0], color[1], color[2]};
-
-    float pos[3]{uniformParams.lightPos.x, uniformParams.lightPos.y, uniformParams.lightPos.z};
-    ImGui::SliderFloat3("Light source position", pos, -10.f, 10.f);
-    uniformParams.lightPos = {pos[0], pos[1], pos[2]};
-
-    ImGui::InputInt("Terrain Texture Width", (int*)&terrainTextureSizeWidth);
-    ImGui::InputInt("Terrain Texture Height", (int*)&terrainTextureSizeHeight);
-    ImGui::InputInt("Compute Workgroup Size", (int*)&computeWorkgroupSize);
-    ImGui::InputInt("Patch Subdivision", (int*)&patchSubdivision);
-    groupCountX = (terrainTextureSizeWidth + computeWorkgroupSize - 1) / computeWorkgroupSize;
-    groupCountY = (terrainTextureSizeHeight + computeWorkgroupSize - 1) / computeWorkgroupSize;
-    ImGui::Text("Group Count X: %u", groupCountX);
-    ImGui::Text("Group Count Y: %u", groupCountY);
-    ImGui::Separator();
-
-    ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Perlin Noise Parameters");
-    ImGui::SliderInt("Octaves", (int*)&perlinParams.octaves, 1, 20);
-    ImGui::SliderFloat("Amplitude", &perlinParams.amplitude, 0.0f, 1.0f);
-    ImGui::SliderFloat("Frequency Multiplier", &perlinParams.frequencyMultiplier, 1.0f, 4.0f);
-    ImGui::SliderFloat("Scale", &perlinParams.scale, 1.0f, 20.0f);
-
-    if (ImGui::Button("Regenerate Terrain"))
-      regenerateTerrain();
-
     ImGui::End();
   }
 }

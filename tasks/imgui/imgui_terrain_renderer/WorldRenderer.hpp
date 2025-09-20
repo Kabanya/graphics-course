@@ -122,6 +122,7 @@ private:
   bool showPerformanceInfo    = true;
   bool showTerrainSettings    = true;
   bool drawDebugTerrainQuad   = false;
+  bool showTabs               = true;
 
   CameraSpeedLevel cameraSpeedLevel = CameraSpeedLevel::Fast;
 
