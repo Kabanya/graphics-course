@@ -15,6 +15,8 @@
 
 #include "FramePacket.hpp"
 
+#include "ParticleSystem.hpp"
+
 struct InstanceGroup
 {
   uint32_t meshIdx;
@@ -72,7 +74,9 @@ private:
   void* persistentMapping = nullptr;
   void* uniformMapping = nullptr;
   void* perlinValuesMapping = nullptr;
+  void* particleMapping = nullptr;
   uint32_t maxInstances = 0;
+  uint32_t maxParticles = 10000;
 
   std::vector<InstanceGroup> instanceGroups;
   std::vector<glm::mat4> instanceMatrices;
@@ -86,8 +90,11 @@ private:
   etna::ComputePipeline perlinPipeline{};
   etna::ComputePipeline normalPipeline{};
   etna::GraphicsPipeline terrainPipeline{};
+  etna::GraphicsPipeline particlePipeline{};
 
   std::unique_ptr<QuadRenderer> quadRenderer;
+
+  std::unique_ptr<ParticleSystem> particleSystem;
 
   struct WorldRendererConstants{
     glm::mat4 viewProj;
@@ -117,6 +124,7 @@ private:
   bool enableTessellation     = true;
   bool enableTerrainRendering = true;
   bool enableSceneRendering   = true;
+  bool enableParticleRendering = true;
 
   bool showRenderSettings     = true;
   bool showPerformanceInfo    = true;
@@ -125,6 +133,8 @@ private:
   bool showTabs               = true;
 
   CameraSpeedLevel cameraSpeedLevel = CameraSpeedLevel::Fast;
+
+  float previousTime = 0.0f;
 
   std::uint32_t terrainTextureSizeWidth  = 4096;
   std::uint32_t terrainTextureSizeHeight = 4096;

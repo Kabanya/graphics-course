@@ -129,6 +129,7 @@ void WorldRenderer::loadShaders()
      IMGUI_TERRAIN_RENDERER_SHADERS_ROOT "terrain.tesc.spv",
      IMGUI_TERRAIN_RENDERER_SHADERS_ROOT "terrain.tese.spv",
      IMGUI_TERRAIN_RENDERER_SHADERS_ROOT "terrain.frag.spv"});
+  etna::create_program("particle_render", {IMGUI_TERRAIN_RENDERER_SHADERS_ROOT "particle.frag.spv", IMGUI_TERRAIN_RENDERER_SHADERS_ROOT "particle.vert.spv"});
 }
 
 void WorldRenderer::setupPipelines(vk::Format swapchain_format)
@@ -139,12 +140,24 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
     }},
   };
 
-  auto& pipelineManager = etna::get_context().getPipelineManager();
+  auto& ctx = etna::get_context();
+  auto& pipelineManager = ctx.getPipelineManager();
 
   quadRenderer = std::make_unique<QuadRenderer>(QuadRenderer::CreateInfo{
     .format = swapchain_format,
     .rect = {{0, 0}, {512, 512}},
   });
+
+  particleSystem = std::make_unique<ParticleSystem>();
+
+  particleSystem->particleBuffer = ctx.createBuffer(etna::Buffer::CreateInfo{
+    .size = maxParticles * sizeof(glm::vec3),
+    .bufferUsage = vk::BufferUsageFlagBits::eVertexBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
+    .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+    .name = "particle_positions",
+  });
+  particleMapping = particleSystem->particleBuffer.map();
 
   staticMeshPipeline = {};
   staticMeshPipeline = pipelineManager.createGraphicsPipeline(
@@ -174,6 +187,34 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
         vk::PipelineRasterizationStateCreateInfo{
           .polygonMode = vk::PolygonMode::eFill,
           .cullMode = vk::CullModeFlagBits::eBack,
+          .frontFace = vk::FrontFace::eCounterClockwise,
+          .lineWidth = 1.f,
+        },
+      .fragmentShaderOutput =
+        {
+          .colorAttachmentFormats = {swapchain_format},
+          .depthAttachmentFormat = vk::Format::eD32Sfloat,
+        },
+    });
+  particlePipeline = pipelineManager.createGraphicsPipeline(
+    "particle_render",
+    etna::GraphicsPipeline::CreateInfo{
+      .vertexShaderInput = etna::VertexShaderInputDescription{
+        .bindings = {etna::VertexShaderInputDescription::Binding{
+          .byteStreamDescription = etna::VertexByteStreamFormatDescription{
+            .stride = sizeof(glm::vec3),
+            .attributes = {etna::VertexByteStreamFormatDescription::Attribute{
+              .format = vk::Format::eR32G32B32Sfloat,
+              .offset = 0,
+            }},
+          },
+        }},
+      },
+      .inputAssemblyConfig = {.topology = vk::PrimitiveTopology::ePointList},
+      .rasterizationConfig =
+        vk::PipelineRasterizationStateCreateInfo{
+          .polygonMode = vk::PolygonMode::eFill,
+          .cullMode = vk::CullModeFlagBits::eNone,
           .frontFace = vk::FrontFace::eCounterClockwise,
           .lineWidth = 1.f,
         },
@@ -231,6 +272,10 @@ void WorldRenderer::debugInput(const Keyboard& kb)
     enableTerrainRendering = !enableTerrainRendering;
     printf("Terrain Rendering: %s\n", enableTerrainRendering ? "ON" : "OFF");
   }
+  if (kb[KeyboardKey::k5] == ButtonState::Falling) {
+    enableParticleRendering = !enableParticleRendering;
+    printf("Particle Rendering: %s\n", enableParticleRendering ? "ON" : "OFF");
+  }
   if (kb[KeyboardKey::kZ] == ButtonState::Falling) {
     showTabs = !showTabs;
     printf("GUI tabs %s\n", showTabs ? "shown" : "hidden");
@@ -253,6 +298,10 @@ void WorldRenderer::update(const FramePacket& packet)
   }
 
   std::memcpy(uniformMapping, &uniformParams, sizeof(UniformParams));
+
+  float dt = packet.currentTime - previousTime;
+  previousTime = packet.currentTime;
+  particleSystem->update(dt);
 
   std::memcpy(perlinValuesMapping, &perlinParams, sizeof(PerlinParams));
 
@@ -450,17 +499,36 @@ void WorldRenderer::renderWorld(
     }
   }
 
-  if (enableTerrainRendering)
-  {
-    ETNA_PROFILE_GPU(cmd_buf, renderTerrain);
+  if (enableParticleRendering || enableTerrainRendering) {
     etna::RenderTargetState renderTargets(
       cmd_buf,
       {{0, 0}, {resolution.x, resolution.y}},
       {{.image = target_image, .view = target_image_view, .loadOp = vk::AttachmentLoadOp::eLoad}},
       {.image = mainViewDepth.get(), .view = mainViewDepth.getView({}), .loadOp = vk::AttachmentLoadOp::eLoad});
 
-    cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, terrainPipeline.getVkPipeline());
-    renderTerrain(cmd_buf);
+    if (enableParticleRendering) {
+      cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, particlePipeline.getVkPipeline());
+      auto shaderInfo = etna::get_shader_program("particle_render");
+      if (shaderInfo.isDescriptorSetUsed(0)) {
+        auto descSet = etna::create_descriptor_set(
+          shaderInfo.getDescriptorLayoutId(0),
+          cmd_buf,
+          {
+            etna::Binding{1, constants.genBinding()},
+          });
+        cmd_buf.bindDescriptorSets(
+          vk::PipelineBindPoint::eGraphics, particlePipeline.getVkPipelineLayout(), 0,
+          {descSet.getVkSet()}, {});
+      }
+      particleSystem->render(cmd_buf, particleMapping);
+    }
+
+    if (enableTerrainRendering)
+    {
+      ETNA_PROFILE_GPU(cmd_buf, renderTerrain);
+      cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, terrainPipeline.getVkPipeline());
+      renderTerrain(cmd_buf);
+    }
   }
 
   if (drawDebugTerrainQuad)
@@ -647,6 +715,7 @@ void WorldRenderer::drawGui()
           ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Rendering Options");
           ImGui::Checkbox("Enable Avocados Rendering", &enableSceneRendering);
           ImGui::Checkbox("Enable Terrain Rendering", &enableTerrainRendering);
+          ImGui::Checkbox("Enable Particle Rendering", &enableParticleRendering);
 
           ImGui::Separator();
           ImGui::Text("Camera Speed");
@@ -691,6 +760,31 @@ void WorldRenderer::drawGui()
           if (ImGui::Button("Regenerate Terrain"))
             regenerateTerrain();
 
+          ImGui::EndTabItem();
+        }
+
+        if (ImGui::BeginTabItem("Particles")) {
+          if (ImGui::Button("Add Emitter")) {
+            Emitter e;
+            e.position = {0, 0, 0};
+            e.spawnFrequency = 10.0f;
+            e.particleLifetime = 5.0f;
+            e.initialVelocity = {0, 10, 0};
+            particleSystem->addEmitter(e);
+          }
+
+          int i = 0;
+          for (auto& emitter : particleSystem->emitters) {
+            ImGui::PushID(i);
+            ImGui::Text("Emitter %d", i);
+            ImGui::SliderFloat3("Position", &emitter.position.x, -100, 100);
+            ImGui::SliderFloat("Spawn Frequency", &emitter.spawnFrequency, 0.1f, 100.0f);
+            ImGui::SliderFloat("Particle Lifetime", &emitter.particleLifetime, 0.1f, 20.0f);
+            ImGui::SliderFloat3("Initial Velocity", &emitter.initialVelocity.x, -50, 50);
+            ImGui::Text("Particles: %zu", emitter.particles.size());
+            ImGui::PopID();
+            i++;
+          }
           ImGui::EndTabItem();
         }
 
