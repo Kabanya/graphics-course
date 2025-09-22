@@ -1,6 +1,6 @@
 #include "ParticleSystem.hpp"
 
-#include <vector>
+#include <algorithm>
 
 void ParticleSystem::update(float dt)
 {
@@ -10,24 +10,41 @@ void ParticleSystem::update(float dt)
     }
 }
 
-void ParticleSystem::render(vk::CommandBuffer cmd_buf, void* particle_mapping)
+void ParticleSystem::render(vk::CommandBuffer cmd_buf, glm::vec3 cam_pos)
 {
-    std::vector<glm::vec3> positions;
-    for (const auto& emitter : emitters)
+    std::sort(emitters.begin(), emitters.end(), [cam_pos](const Emitter& a, const Emitter& b) {
+        return glm::distance(a.position, cam_pos) > glm::distance(b.position, cam_pos);
+    });
+
+    void* mapping = particleBuffer.map();
+    glm::vec4* particleData = static_cast<glm::vec4*>(mapping);
+
+    size_t totalParticles = 0;
+    for (auto& emitter : emitters)
     {
+        if (emitter.particles.empty())
+            continue;
+
+        std::sort(emitter.particles.begin(), emitter.particles.end(), [cam_pos](const Particle& a, const Particle& b) {
+            return glm::distance(a.position, cam_pos) > glm::distance(b.position, cam_pos);
+        });
+
         for (const auto& particle : emitter.particles)
         {
-            positions.push_back(particle.position);
+            if (totalParticles >= MAX_PARTICLES)
+                break;
+            particleData[totalParticles] = glm::vec4(particle.position, particle.size);
+            ++totalParticles;
         }
     }
 
-    if (positions.empty())
+    particleBuffer.unmap();
+
+    if (totalParticles == 0)
         return;
 
-    std::memcpy(particle_mapping, positions.data(), positions.size() * sizeof(glm::vec3));
-
     cmd_buf.bindVertexBuffers(0, {particleBuffer.get()}, {0});
-    cmd_buf.draw(static_cast<uint32_t>(positions.size()), 1, 0, 0);
+    cmd_buf.draw(static_cast<uint32_t>(totalParticles), 1, 0, 0);
 }
 
 void ParticleSystem::addEmitter(const Emitter& emitter)

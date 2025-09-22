@@ -7,4 +7,5 @@ struct Particle
     glm::vec3 position;
     glm::vec3 velocity;
     float remainingLifetime;
-};
+    float size;
+};;

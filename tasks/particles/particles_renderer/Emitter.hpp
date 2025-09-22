@@ -12,6 +12,8 @@ public:
     float spawnFrequency;
     float particleLifetime;
     glm::vec3 initialVelocity;
+    glm::vec3 gravity;
+    float size;
 
     std::vector<Particle> particles;
     float timeSinceLastSpawn = 0.0f;

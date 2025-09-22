@@ -74,7 +74,6 @@ private:
   void* persistentMapping = nullptr;
   void* uniformMapping = nullptr;
   void* perlinValuesMapping = nullptr;
-  void* particleMapping = nullptr;
   uint32_t maxInstances = 0;
   uint32_t maxParticles = 10000;
 
@@ -107,6 +106,7 @@ private:
     .lightPos = {},
     .time = {},
     .baseColor = {0.9f, 0.92f, 1.0f},
+    .particleAlpha = 0.5f,
   };
 
   PerlinParams perlinParams{
@@ -120,19 +120,18 @@ private:
 
   glm::uvec2 resolution;
 
-  bool enableFrustumCulling   = true;
-  bool enableTessellation     = true;
-  bool enableTerrainRendering = true;
-  bool enableSceneRendering   = true;
+  bool enableFrustumCulling    = true;
+  bool enableTessellation      = true;
+  bool enableTerrainRendering  = true;
+  bool enableSceneRendering    = true;
   bool enableParticleRendering = true;
 
-  bool showRenderSettings     = true;
   bool showPerformanceInfo    = true;
   bool showTerrainSettings    = true;
   bool drawDebugTerrainQuad   = false;
   bool showTabs               = true;
 
-  CameraSpeedLevel cameraSpeedLevel = CameraSpeedLevel::Fast;
+  CameraSpeedLevel cameraSpeedLevel = CameraSpeedLevel::Middle;
 
   float previousTime = 0.0f;
 

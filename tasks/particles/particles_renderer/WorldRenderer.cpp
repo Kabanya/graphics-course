@@ -151,13 +151,12 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
   particleSystem = std::make_unique<ParticleSystem>();
 
   particleSystem->particleBuffer = ctx.createBuffer(etna::Buffer::CreateInfo{
-    .size = maxParticles * sizeof(glm::vec3),
+    .size = ParticleSystem::MAX_PARTICLES * sizeof(glm::vec4),
     .bufferUsage = vk::BufferUsageFlagBits::eVertexBuffer,
     .memoryUsage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
     .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
     .name = "particle_positions",
   });
-  particleMapping = particleSystem->particleBuffer.map();
 
   staticMeshPipeline = {};
   staticMeshPipeline = pipelineManager.createGraphicsPipeline(
@@ -202,9 +201,9 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
       .vertexShaderInput = etna::VertexShaderInputDescription{
         .bindings = {etna::VertexShaderInputDescription::Binding{
           .byteStreamDescription = etna::VertexByteStreamFormatDescription{
-            .stride = sizeof(glm::vec3),
+            .stride = sizeof(glm::vec4),
             .attributes = {etna::VertexByteStreamFormatDescription::Attribute{
-              .format = vk::Format::eR32G32B32Sfloat,
+              .format = vk::Format::eR32G32B32A32Sfloat,
               .offset = 0,
             }},
           },
@@ -218,10 +217,23 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
           .frontFace = vk::FrontFace::eCounterClockwise,
           .lineWidth = 1.f,
         },
+      .blendingConfig = {
+        .attachments = {vk::PipelineColorBlendAttachmentState{
+          .blendEnable = VK_TRUE,
+          .srcColorBlendFactor = vk::BlendFactor::eSrcAlpha,
+          .dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
+          .colorBlendOp = vk::BlendOp::eAdd,
+          .srcAlphaBlendFactor = vk::BlendFactor::eOne,
+          .dstAlphaBlendFactor = vk::BlendFactor::eZero,
+          .alphaBlendOp = vk::BlendOp::eAdd,
+          .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+        }},
+        .logicOpEnable = false,
+        .logicOp = vk::LogicOp::eCopy,
+      },
       .fragmentShaderOutput =
         {
           .colorAttachmentFormats = {swapchain_format},
-          .depthAttachmentFormat = vk::Format::eD32Sfloat,
         },
     });
 }
@@ -485,50 +497,47 @@ void WorldRenderer::renderWorld(
   ETNA_PROFILE_GPU(cmd_buf, renderWorld);
 
   {
-    ETNA_PROFILE_GPU(cmd_buf, renderForward);
-
     etna::RenderTargetState renderTargets(
       cmd_buf,
       {{0, 0}, {resolution.x, resolution.y}},
       {{.image = target_image, .view = target_image_view}},
       {.image = mainViewDepth.get(), .view = mainViewDepth.getView({})});
 
-    if (enableSceneRendering) {
+    if (enableSceneRendering)
+    {
       cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, staticMeshPipeline.getVkPipeline());
       renderScene(cmd_buf, staticMeshPipeline.getVkPipelineLayout());
     }
-  }
-
-  if (enableParticleRendering || enableTerrainRendering) {
-    etna::RenderTargetState renderTargets(
-      cmd_buf,
-      {{0, 0}, {resolution.x, resolution.y}},
-      {{.image = target_image, .view = target_image_view, .loadOp = vk::AttachmentLoadOp::eLoad}},
-      {.image = mainViewDepth.get(), .view = mainViewDepth.getView({}), .loadOp = vk::AttachmentLoadOp::eLoad});
-
-    if (enableParticleRendering) {
-      cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, particlePipeline.getVkPipeline());
-      auto shaderInfo = etna::get_shader_program("particle_render");
-      if (shaderInfo.isDescriptorSetUsed(0)) {
-        auto descSet = etna::create_descriptor_set(
-          shaderInfo.getDescriptorLayoutId(0),
-          cmd_buf,
-          {
-            etna::Binding{1, constants.genBinding()},
-          });
-        cmd_buf.bindDescriptorSets(
-          vk::PipelineBindPoint::eGraphics, particlePipeline.getVkPipelineLayout(), 0,
-          {descSet.getVkSet()}, {});
-      }
-      particleSystem->render(cmd_buf, particleMapping);
-    }
-
     if (enableTerrainRendering)
     {
       ETNA_PROFILE_GPU(cmd_buf, renderTerrain);
       cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, terrainPipeline.getVkPipeline());
       renderTerrain(cmd_buf);
     }
+  }
+
+  if (enableParticleRendering) {
+    etna::RenderTargetState renderTargets(
+      cmd_buf,
+      {{0, 0}, {resolution.x, resolution.y}},
+      {{.image = target_image, .view = target_image_view, .loadOp = vk::AttachmentLoadOp::eLoad}},
+      {.image = mainViewDepth.get(), .view = mainViewDepth.getView({}), .loadOp = vk::AttachmentLoadOp::eLoad});
+
+    cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, particlePipeline.getVkPipeline());
+    auto shaderInfo = etna::get_shader_program("particle_render");
+    if (shaderInfo.isDescriptorSetUsed(0)) {
+      auto descSet = etna::create_descriptor_set(
+        shaderInfo.getDescriptorLayoutId(0),
+        cmd_buf,
+        {
+          etna::Binding{1, constants.genBinding()},
+          etna::Binding{2, uniformParamsBuffer.genBinding()},
+        });
+      cmd_buf.bindDescriptorSets(
+        vk::PipelineBindPoint::eGraphics, particlePipeline.getVkPipelineLayout(), 0,
+        {descSet.getVkSet()}, {});
+    }
+    particleSystem->render(cmd_buf, camView);
   }
 
   if (drawDebugTerrainQuad)
@@ -691,7 +700,7 @@ void WorldRenderer::drawGui()
 {
   if (showTabs)
   {
-    if (ImGui::Begin("Renderer Settings", &showRenderSettings))
+    if (ImGui::Begin("Renderer Settings", &showTabs))
     {
       if (ImGui::BeginTabBar("SettingsTabs"))
       {
@@ -702,6 +711,10 @@ void WorldRenderer::drawGui()
             1000.0f / ImGui::GetIO().Framerate,
             ImGui::GetIO().Framerate);
           ImGui::Text("Rendered Instances: %u", renderedInstances);
+          std::size_t totalParticles = 0;
+          for (const auto& emitter : particleSystem->emitters)
+            totalParticles += emitter.particles.size();
+          ImGui::Text("Total Particles: %zu", totalParticles);
           ImGui::EndTabItem();
         }
 
@@ -722,9 +735,7 @@ void WorldRenderer::drawGui()
           int currentSpeed = static_cast<int>(cameraSpeedLevel);
           const char* speedItems[] = { "Slow", "Middle", "Fast" };
           if (ImGui::Combo("##CameraSpeed", &currentSpeed, speedItems, IM_ARRAYSIZE(speedItems)))
-          {
             cameraSpeedLevel = static_cast<CameraSpeedLevel>(currentSpeed);
-          }
           ImGui::EndTabItem();
         }
 
@@ -763,31 +774,55 @@ void WorldRenderer::drawGui()
           ImGui::EndTabItem();
         }
 
-        if (ImGui::BeginTabItem("Particles")) {
-          if (ImGui::Button("Add Emitter")) {
+        if (ImGui::BeginTabItem("Particles"))
+        {
+          ImGui::SliderFloat("Particle Alpha", &uniformParams.particleAlpha, 0.0f, 1.0f);
+
+          if (ImGui::Button("Add Emitter"))
+          {
             Emitter e;
             e.position = {0, 0, 0};
             e.spawnFrequency = 10.0f;
             e.particleLifetime = 5.0f;
             e.initialVelocity = {0, 10, 0};
+            e.gravity = {0, -9.8f, 0};
+            e.size = 20.0f;
             particleSystem->addEmitter(e);
           }
 
+          if (ImGui::Button("Add High Load Emitters"))
+          {
+            for (int i = 0; i < 10; ++i)
+            {
+              Emitter e;
+              e.position = {i * 0.5f, 0, 0};
+              e.spawnFrequency = 150.0f;
+              e.particleLifetime = 50.0f;
+              e.initialVelocity = {i *0.2f, (10 + i) * 0.1f, i * 0.3f};
+              e.gravity = {0, -9.8f, 0};
+              e.size = 20.0f;
+              particleSystem->addEmitter(e);
+            }
+          }
+
           int i = 0;
-          for (auto& emitter : particleSystem->emitters) {
+          for (auto& emitter : particleSystem->emitters)
+          {
             ImGui::PushID(i);
             ImGui::Text("Emitter %d", i);
-            ImGui::SliderFloat3("Position", &emitter.position.x, -100, 100);
-            ImGui::SliderFloat("Spawn Frequency", &emitter.spawnFrequency, 0.1f, 100.0f);
-            ImGui::SliderFloat("Particle Lifetime", &emitter.particleLifetime, 0.1f, 20.0f);
-            ImGui::SliderFloat3("Initial Velocity", &emitter.initialVelocity.x, -50, 50);
+            ImGui::SliderFloat3("Position", &emitter.position.x, -10, 10);
+            ImGui::SliderFloat("Spawn Frequency", &emitter.spawnFrequency, 0.1f, 150.0f);
+            ImGui::SliderFloat("Particle Lifetime", &emitter.particleLifetime, 0.1f, 25.0f);
+            ImGui::SliderFloat3("Initial Velocity", &emitter.initialVelocity.x, -15, 15);
+            ImGui::SliderFloat3("Gravity", &emitter.gravity.x, -2, 2);
+            ImGui::SliderFloat("Size", &emitter.size, 1.0f, 50.0f);
             ImGui::Text("Particles: %zu", emitter.particles.size());
             ImGui::PopID();
             i++;
           }
           ImGui::EndTabItem();
         }
-
+        // INFO TAB
         if (ImGui::BeginTabItem("Info"))
         {
           ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Press 'B' to recompile and reload shaders");
@@ -809,7 +844,6 @@ void WorldRenderer::drawGui()
           ImGui::BulletText("Escape: Close application");
           ImGui::EndTabItem();
         }
-
         ImGui::EndTabBar();
       }
     }
