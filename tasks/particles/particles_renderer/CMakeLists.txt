@@ -5,6 +5,7 @@ add_executable(particles_renderer
   App.cpp
   Renderer.cpp
   WorldRenderer.cpp
+  WorldRendererGui.cpp
   Emitter.cpp
   ParticleSystem.cpp
 )

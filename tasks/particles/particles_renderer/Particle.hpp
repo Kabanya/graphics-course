@@ -21,7 +21,7 @@ struct Particle32T
 
 struct [[gnu::packed]] Particle24T
 {
-  glm::vec3 position;
+  float position[3];
   std::uint16_t velocityX;
   std::uint16_t velocityY;
   std::uint16_t velocityZ;
@@ -30,8 +30,8 @@ struct [[gnu::packed]] Particle24T
 
   std::uint8_t padding[2];
 
-  glm::vec3 getPosition() const { return position; }
-  void setPosition(const glm::vec3& pos) { position = pos; }
+  glm::vec3 getPosition() const { return glm::vec3(position[0], position[1], position[2]); }
+  void setPosition(const glm::vec3& pos) { position[0] = pos.x; position[1] = pos.y; position[2] = pos.z; }
 
   void setVelocity(const glm::vec3& vel)
   {
@@ -102,4 +102,4 @@ struct alignas(16) Particle16T
   void  setSize(float s) { size = static_cast<std::uint8_t>(glm::clamp(s, 0.0f, 10.0f) * 25.5f); }
 };
 
-typedef Particle16T Particle;
+typedef Particle32T Particle;

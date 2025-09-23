@@ -12,6 +12,7 @@
 WorldRenderer::WorldRenderer()
   : sceneMgr{std::make_unique<SceneManager>()}
 {
+  gui = std::make_unique<WorldRendererGui>(*this);
   groupCountX = (terrainTextureSizeWidth + computeWorkgroupSize - 1) / computeWorkgroupSize;
   groupCountY = (terrainTextureSizeHeight + computeWorkgroupSize - 1) / computeWorkgroupSize;
 }
@@ -317,6 +318,15 @@ void WorldRenderer::update(const FramePacket& packet)
   float dt = packet.currentTime - previousTime;
   previousTime = packet.currentTime;
   particleSystem->update(dt, wind);
+
+  totalParticles = 0;
+  for (const auto& emitter : particleSystem->emitters)
+    totalParticles += emitter.particles.size();
+  while (totalParticles >= nextMilestone && fpsMilestones.find(nextMilestone) == fpsMilestones.end())
+  {
+    fpsMilestones[nextMilestone] = ImGui::GetIO().Framerate;
+    nextMilestone += 5000;
+  }
 
   std::memcpy(perlinValuesMapping, &perlinParams, sizeof(PerlinParams));
 
@@ -702,180 +712,5 @@ float WorldRenderer::getCameraSpeed() const
 
 void WorldRenderer::drawGui()
 {
-  if (showTabs)
-  {
-    if (ImGui::Begin("Renderer Settings", &showTabs))
-    {
-      if (ImGui::BeginTabBar("SettingsTabs"))
-      {
-        if (ImGui::BeginTabItem("Performance"))
-        {
-          ImGui::Text(
-            "Application average %.3f ms/frame (%.1f FPS)",
-            1000.0f / ImGui::GetIO().Framerate,
-            ImGui::GetIO().Framerate);
-          ImGui::Text("Rendered Instances: %u", renderedInstances);
-          std::size_t totalParticles = 0;
-          for (const auto& emitter : particleSystem->emitters)
-            totalParticles += emitter.particles.size();
-          ImGui::Text("Total Particles: %zu", totalParticles);
-          ImGui::EndTabItem();
-        }
-
-        if (ImGui::BeginTabItem("Render"))
-        {
-          ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Culling and Tessellation");
-          ImGui::Checkbox("Enable Frustum Culling", &enableFrustumCulling);
-          ImGui::Checkbox("Enable Tessellation", &enableTessellation);
-
-          ImGui::Separator();
-          ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Rendering Options");
-          ImGui::Checkbox("Enable Avocados Rendering", &enableSceneRendering);
-          ImGui::Checkbox("Enable Terrain Rendering", &enableTerrainRendering);
-          ImGui::Checkbox("Enable Particle Rendering", &enableParticleRendering);
-
-          ImGui::Separator();
-          ImGui::Text("Camera Speed");
-          int currentSpeed = static_cast<int>(cameraSpeedLevel);
-          const char* speedItems[] = { "Slow", "Middle", "Fast" };
-          if (ImGui::Combo("##CameraSpeed", &currentSpeed, speedItems, IM_ARRAYSIZE(speedItems)))
-            cameraSpeedLevel = static_cast<CameraSpeedLevel>(currentSpeed);
-          ImGui::EndTabItem();
-        }
-
-        if (ImGui::BeginTabItem("Terrain"))
-        {
-          ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Terrain Parameters");
-          ImGui::Checkbox("Draw Debug Terrain Quad", &drawDebugTerrainQuad);
-          float color[3]{uniformParams.baseColor.r, uniformParams.baseColor.g, uniformParams.baseColor.b};
-          ImGui::ColorEdit3(
-            "Terrain base color", color, ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoInputs);
-          uniformParams.baseColor = {color[0], color[1], color[2]};
-
-          float pos[3]{uniformParams.lightPos.x, uniformParams.lightPos.y, uniformParams.lightPos.z};
-          ImGui::SliderFloat3("Light source position", pos, -10.f, 10.f);
-          uniformParams.lightPos = {pos[0], pos[1], pos[2]};
-
-          ImGui::InputInt("Terrain Texture Width", (int*)&terrainTextureSizeWidth);
-          ImGui::InputInt("Terrain Texture Height", (int*)&terrainTextureSizeHeight);
-          ImGui::InputInt("Compute Workgroup Size", (int*)&computeWorkgroupSize);
-          ImGui::InputInt("Patch Subdivision", (int*)&patchSubdivision);
-          groupCountX = (terrainTextureSizeWidth + computeWorkgroupSize - 1) / computeWorkgroupSize;
-          groupCountY = (terrainTextureSizeHeight + computeWorkgroupSize - 1) / computeWorkgroupSize;
-          ImGui::Text("Group Count X: %u", groupCountX);
-          ImGui::Text("Group Count Y: %u", groupCountY);
-          ImGui::Separator();
-
-          ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Perlin Noise Parameters");
-          ImGui::SliderInt("Octaves", (int*)&perlinParams.octaves, 1, 20);
-          ImGui::SliderFloat("Amplitude", &perlinParams.amplitude, 0.0f, 1.0f);
-          ImGui::SliderFloat("Frequency Multiplier", &perlinParams.frequencyMultiplier, 1.0f, 4.0f);
-          ImGui::SliderFloat("Scale", &perlinParams.scale, 1.0f, 20.0f);
-
-          if (ImGui::Button("Regenerate Terrain"))
-            regenerateTerrain();
-
-          ImGui::EndTabItem();
-        }
-
-        if (ImGui::BeginTabItem("Particles"))
-        {
-          ImGui::SliderFloat("Particle Alpha", &uniformParams.particleAlpha, 0.0f, 1.0f);
-          float particleColor[3]{uniformParams.particleColor.r, uniformParams.particleColor.g, uniformParams.particleColor.b};
-          ImGui::ColorEdit3(
-            "Particle Color", particleColor, ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoInputs);
-          uniformParams.particleColor = {particleColor[0], particleColor[1], particleColor[2]};
-          ImGui::SliderFloat3("Wind", &wind.x, -5.0f, 5.0f);
-          ImGui::SliderInt("Max Particles per Emitter", (int*)&particleSystem->max_particlesPerEmitter, 0, 10000);
-
-          if (ImGui::Button("Add Emitter"))
-          {
-            Emitter e;
-            e.position = {0, 0, 0};
-            e.spawnFrequency = 10.0f;
-            e.particleLifetime = 5.0f;
-            e.initialVelocity = {0, 10, 0};
-            e.gravity = {0, -9.8f, 0};
-            e.drag = 0.1f;
-            e.size = 5.0f;
-            particleSystem->addEmitter(e);
-          }
-
-          if (ImGui::Button("Add High Load Emitters"))
-          {
-            for (int i = 0; i < 10; ++i)
-            {
-              Emitter e;
-              e.position = {i * 0.5f, 0, 0};
-              e.spawnFrequency = 150.0f;
-              e.particleLifetime = 50.0f;
-              e.initialVelocity = {i *0.2f, (10 + i) * 0.1f, i * 0.3f};
-              e.gravity = {0, -9.8f, 0};
-              e.drag = 0.1f;
-              e.size = 5.0f;
-              particleSystem->addEmitter(e);
-            }
-          }
-
-          if (ImGui::Button("Clear All Emitters"))
-          {
-            particleSystem->emitters.clear();
-          }
-
-          std::vector<size_t> emittersToRemove;
-          int i = 0;
-          for (auto& emitter : particleSystem->emitters)
-          {
-            ImGui::PushID(i);
-            ImGui::Text("Emitter %d", i);
-            ImGui::SliderFloat3("Position", &emitter.position.x, -10, 10);
-            ImGui::SliderFloat("Spawn Frequency", &emitter.spawnFrequency, 0.1f, 500.0f);
-            ImGui::SliderFloat("Particle Lifetime", &emitter.particleLifetime, 0.1f, 25.0f);
-            ImGui::SliderFloat3("Initial Velocity", &emitter.initialVelocity.x, -15, 15);
-            ImGui::SliderFloat3("Gravity", &emitter.gravity.x, -2, 2);
-            ImGui::SliderFloat("Drag", &emitter.drag, 0.0f, 1.0f);
-            ImGui::SliderFloat("Size", &emitter.size, 1.0f, 50.0f);
-            if (ImGui::Button("Clear Particles"))
-              emitter.clearParticles();
-            ImGui::SameLine();
-            if (ImGui::Button("Remove Emitter"))
-              emittersToRemove.push_back(i);
-            ImGui::SameLine();
-            ImGui::Text("Particles: %zu", emitter.particles.size());
-            ImGui::PopID();
-            i++;
-          }
-
-          std::sort(emittersToRemove.rbegin(), emittersToRemove.rend());
-          for (auto idx : emittersToRemove)
-            particleSystem->removeEmitter(idx);
-          ImGui::EndTabItem();
-        }
-
-        if (ImGui::BeginTabItem("Info"))
-        {
-          ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Press 'B' to recompile and reload shaders");
-
-          ImGui::Separator();
-          ImGui::NewLine();
-          ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Controls:");
-          ImGui::BulletText("1: Toggle Frustum Culling");
-          ImGui::BulletText("2: Toggle Tessellation");
-          ImGui::BulletText("3: Toggle Avocados Rendering");
-          ImGui::BulletText("4: Toggle Terrain Rendering");
-          ImGui::BulletText("Z: Toggle GUI tabs");
-          ImGui::BulletText("Q: Toggle Debug Terrain Quad");
-          ImGui::BulletText("WASD: Move camera");
-          ImGui::BulletText("F/R: Move camera up/down");
-          ImGui::BulletText("Mouse: Rotate camera (hold right-click)");
-          ImGui::BulletText("Scroll: Zoom in/out");
-          ImGui::BulletText("Shift: Boost camera speed");
-          ImGui::BulletText("Escape: Close application");
-          ImGui::EndTabItem();
-        }
-        ImGui::EndTabBar();
-      }
-    }
-    ImGui::End();
-  }
+  gui->drawGui();
 }

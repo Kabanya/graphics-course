@@ -16,6 +16,7 @@
 #include "FramePacket.hpp"
 
 #include "ParticleSystem.hpp"
+#include "WorldRendererGui.hpp"
 
 struct InstanceGroup
 {
@@ -33,6 +34,7 @@ enum class CameraSpeedLevel
 
 class WorldRenderer
 {
+  friend class WorldRendererGui;
 public:
   explicit WorldRenderer();
 
@@ -95,6 +97,8 @@ private:
 
   std::unique_ptr<ParticleSystem> particleSystem;
 
+  std::unique_ptr<WorldRendererGui> gui;
+
   glm::vec3 wind = {0.0f, 0.0f, 0.0f};
 
   struct WorldRendererConstants{
@@ -146,4 +150,10 @@ private:
   std::uint32_t groupCountY;
 
   uint32_t renderedInstances = 0;
+
+  uint32_t totalParticles = 0;
+  uint32_t nextMilestone = 5000;
+  std::map<uint32_t, float> fpsMilestones;
+
+  bool showFpsMilestones = true;
 };
