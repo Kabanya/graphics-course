@@ -13,11 +13,12 @@ layout(std140, set = 0, binding = 2) uniform UniformParams
   float time;
   vec3 baseColor;
   float particleAlpha;
+  vec3 particleColor;
 } uniformParams;
 
 layout(location = 0) out vec4 out_fragColor;
 
 void main()
 {
-  out_fragColor = vec4(1.0, 1.0, 1.0, uniformParams.particleAlpha);
+  out_fragColor = vec4(uniformParams.particleColor, uniformParams.particleAlpha);
 }

@@ -18,6 +18,7 @@ struct UniformParams
   shader_float time;
   shader_vec3 baseColor;
   shader_float particleAlpha;
+  shader_vec3 particleColor;
 };
 
 #endif // UNIFORM_PARAMS_H_INCLUDED

@@ -781,6 +781,10 @@ void WorldRenderer::drawGui()
         if (ImGui::BeginTabItem("Particles"))
         {
           ImGui::SliderFloat("Particle Alpha", &uniformParams.particleAlpha, 0.0f, 1.0f);
+          float particleColor[3]{uniformParams.particleColor.r, uniformParams.particleColor.g, uniformParams.particleColor.b};
+          ImGui::ColorEdit3(
+            "Particle Color", particleColor, ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoInputs);
+          uniformParams.particleColor = {particleColor[0], particleColor[1], particleColor[2]};
           ImGui::SliderFloat3("Wind", &wind.x, -5.0f, 5.0f);
           ImGui::SliderInt("Max Particles per Emitter", (int*)&particleSystem->max_particlesPerEmitter, 0, 10000);
 
