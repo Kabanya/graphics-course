@@ -9,16 +9,17 @@ class Emitter
 {
 public:
     glm::vec3 position;
-    float spawnFrequency;
-    float particleLifetime;
     glm::vec3 initialVelocity;
     glm::vec3 gravity;
+    float drag;
+    float spawnFrequency;
+    float particleLifetime;
     float size;
-
-    std::vector<Particle> particles;
     float timeSinceLastSpawn = 0.0f;
 
-    void update(float dt, uint32_t max_particles);
+    std::vector<Particle> particles;
+
+    void update(float dt, std::uint32_t max_particles, glm::vec3 wind);
     void spawnParticle();
     void clearParticles();
 };

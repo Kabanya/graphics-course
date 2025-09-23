@@ -95,6 +95,8 @@ private:
 
   std::unique_ptr<ParticleSystem> particleSystem;
 
+  glm::vec3 wind = {0.0f, 0.0f, 0.0f};
+
   struct WorldRendererConstants{
     glm::mat4 viewProj;
     glm::vec4 camView;

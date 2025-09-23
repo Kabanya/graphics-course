@@ -236,6 +236,7 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
       .fragmentShaderOutput =
         {
           .colorAttachmentFormats = {swapchain_format},
+          .depthAttachmentFormat = vk::Format::eD32Sfloat,
         },
     });
 }
@@ -315,7 +316,7 @@ void WorldRenderer::update(const FramePacket& packet)
 
   float dt = packet.currentTime - previousTime;
   previousTime = packet.currentTime;
-  particleSystem->update(dt);
+  particleSystem->update(dt, wind);
 
   std::memcpy(perlinValuesMapping, &perlinParams, sizeof(PerlinParams));
 
@@ -507,6 +508,7 @@ void WorldRenderer::renderWorld(
 
     if (enableSceneRendering)
     {
+      ETNA_PROFILE_GPU(cmd_buf, renderScene);
       cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, staticMeshPipeline.getVkPipeline());
       renderScene(cmd_buf, staticMeshPipeline.getVkPipelineLayout());
     }
@@ -779,6 +781,7 @@ void WorldRenderer::drawGui()
         if (ImGui::BeginTabItem("Particles"))
         {
           ImGui::SliderFloat("Particle Alpha", &uniformParams.particleAlpha, 0.0f, 1.0f);
+          ImGui::SliderFloat3("Wind", &wind.x, -5.0f, 5.0f);
           ImGui::SliderInt("Max Particles per Emitter", (int*)&particleSystem->max_particlesPerEmitter, 0, 10000);
 
           if (ImGui::Button("Add Emitter"))
@@ -789,6 +792,7 @@ void WorldRenderer::drawGui()
             e.particleLifetime = 5.0f;
             e.initialVelocity = {0, 10, 0};
             e.gravity = {0, -9.8f, 0};
+            e.drag = 0.1f;
             e.size = 5.0f;
             particleSystem->addEmitter(e);
           }
@@ -803,6 +807,7 @@ void WorldRenderer::drawGui()
               e.particleLifetime = 50.0f;
               e.initialVelocity = {i *0.2f, (10 + i) * 0.1f, i * 0.3f};
               e.gravity = {0, -9.8f, 0};
+              e.drag = 0.1f;
               e.size = 5.0f;
               particleSystem->addEmitter(e);
             }
@@ -824,6 +829,7 @@ void WorldRenderer::drawGui()
             ImGui::SliderFloat("Particle Lifetime", &emitter.particleLifetime, 0.1f, 25.0f);
             ImGui::SliderFloat3("Initial Velocity", &emitter.initialVelocity.x, -15, 15);
             ImGui::SliderFloat3("Gravity", &emitter.gravity.x, -2, 2);
+            ImGui::SliderFloat("Drag", &emitter.drag, 0.0f, 1.0f);
             ImGui::SliderFloat("Size", &emitter.size, 1.0f, 50.0f);
             if (ImGui::Button("Clear Particles"))
               emitter.clearParticles();
