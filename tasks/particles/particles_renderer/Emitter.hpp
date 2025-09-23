@@ -18,6 +18,7 @@ public:
     std::vector<Particle> particles;
     float timeSinceLastSpawn = 0.0f;
 
-    void update(float dt);
+    void update(float dt, uint32_t max_particles);
     void spawnParticle();
+    void clearParticles();
 };

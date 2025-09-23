@@ -6,6 +6,8 @@
 #include <etna/Profiling.hpp>
 #include <glm/ext.hpp>
 #include <imgui.h>
+#include <algorithm>
+#include <vector>
 
 WorldRenderer::WorldRenderer()
   : sceneMgr{std::make_unique<SceneManager>()}
@@ -777,6 +779,7 @@ void WorldRenderer::drawGui()
         if (ImGui::BeginTabItem("Particles"))
         {
           ImGui::SliderFloat("Particle Alpha", &uniformParams.particleAlpha, 0.0f, 1.0f);
+          ImGui::SliderInt("Max Particles per Emitter", (int*)&particleSystem->max_particlesPerEmitter, 0, 10000);
 
           if (ImGui::Button("Add Emitter"))
           {
@@ -786,7 +789,7 @@ void WorldRenderer::drawGui()
             e.particleLifetime = 5.0f;
             e.initialVelocity = {0, 10, 0};
             e.gravity = {0, -9.8f, 0};
-            e.size = 20.0f;
+            e.size = 5.0f;
             particleSystem->addEmitter(e);
           }
 
@@ -800,29 +803,45 @@ void WorldRenderer::drawGui()
               e.particleLifetime = 50.0f;
               e.initialVelocity = {i *0.2f, (10 + i) * 0.1f, i * 0.3f};
               e.gravity = {0, -9.8f, 0};
-              e.size = 20.0f;
+              e.size = 5.0f;
               particleSystem->addEmitter(e);
             }
           }
 
+          if (ImGui::Button("Clear All Emitters"))
+          {
+            particleSystem->emitters.clear();
+          }
+
+          std::vector<size_t> emittersToRemove;
           int i = 0;
           for (auto& emitter : particleSystem->emitters)
           {
             ImGui::PushID(i);
             ImGui::Text("Emitter %d", i);
             ImGui::SliderFloat3("Position", &emitter.position.x, -10, 10);
-            ImGui::SliderFloat("Spawn Frequency", &emitter.spawnFrequency, 0.1f, 150.0f);
+            ImGui::SliderFloat("Spawn Frequency", &emitter.spawnFrequency, 0.1f, 500.0f);
             ImGui::SliderFloat("Particle Lifetime", &emitter.particleLifetime, 0.1f, 25.0f);
             ImGui::SliderFloat3("Initial Velocity", &emitter.initialVelocity.x, -15, 15);
             ImGui::SliderFloat3("Gravity", &emitter.gravity.x, -2, 2);
             ImGui::SliderFloat("Size", &emitter.size, 1.0f, 50.0f);
+            if (ImGui::Button("Clear Particles"))
+              emitter.clearParticles();
+            ImGui::SameLine();
+            if (ImGui::Button("Remove Emitter"))
+              emittersToRemove.push_back(i);
+            ImGui::SameLine();
             ImGui::Text("Particles: %zu", emitter.particles.size());
             ImGui::PopID();
             i++;
           }
+
+          std::sort(emittersToRemove.rbegin(), emittersToRemove.rend());
+          for (auto idx : emittersToRemove)
+            particleSystem->removeEmitter(idx);
           ImGui::EndTabItem();
         }
-        // INFO TAB
+
         if (ImGui::BeginTabItem("Info"))
         {
           ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Press 'B' to recompile and reload shaders");

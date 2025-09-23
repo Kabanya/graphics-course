@@ -6,7 +6,7 @@ void ParticleSystem::update(float dt)
 {
     for (auto& emitter : emitters)
     {
-        emitter.update(dt);
+        emitter.update(dt, max_particlesPerEmitter);
     }
 }
 
@@ -50,4 +50,12 @@ void ParticleSystem::render(vk::CommandBuffer cmd_buf, glm::vec3 cam_pos)
 void ParticleSystem::addEmitter(const Emitter& emitter)
 {
     emitters.push_back(emitter);
+}
+
+void ParticleSystem::removeEmitter(size_t index)
+{
+    if (index < emitters.size())
+    {
+        emitters.erase(emitters.begin() + index);
+    }
 }

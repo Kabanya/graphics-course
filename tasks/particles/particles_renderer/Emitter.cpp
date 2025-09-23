@@ -1,11 +1,10 @@
 #include "Emitter.hpp"
-#include "ParticleSystem.hpp"
 
-void Emitter::update(float dt)
+void Emitter::update(float dt, uint32_t max_particles)
 {
     timeSinceLastSpawn += dt;
     float spawnInterval = 1.0f / spawnFrequency;
-    while (timeSinceLastSpawn >= spawnInterval && particles.size() < ParticleSystem::N_PARTICLES_PER_EMITTER)
+    while (timeSinceLastSpawn >= spawnInterval && particles.size() < max_particles)
     {
         spawnParticle();
         timeSinceLastSpawn -= spawnInterval;
@@ -31,4 +30,9 @@ void Emitter::spawnParticle()
     p.remainingLifetime = particleLifetime;
     p.size = size;
     particles.push_back(p);
+}
+
+void Emitter::clearParticles()
+{
+    particles.clear();
 }

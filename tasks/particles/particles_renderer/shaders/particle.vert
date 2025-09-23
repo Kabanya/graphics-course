@@ -11,5 +11,5 @@ layout(std140, set = 0, binding = 1) uniform Constants
 void main()
 {
   gl_Position = constants.viewProj * vec4(inPositionSize.xyz, 1.0);
-  gl_PointSize = 5.0;
+  gl_PointSize = inPositionSize.w;
 }

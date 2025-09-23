@@ -75,7 +75,7 @@ private:
   void* uniformMapping = nullptr;
   void* perlinValuesMapping = nullptr;
   uint32_t maxInstances = 0;
-  uint32_t maxParticles = 10000;
+  uint32_t max_particles = 10000;
 
   std::vector<InstanceGroup> instanceGroups;
   std::vector<glm::mat4> instanceMatrices;

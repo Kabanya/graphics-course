@@ -16,6 +16,7 @@ public:
     void update(float dt);
     void render(vk::CommandBuffer cmd_buf, glm::vec3 cam_pos);
     void addEmitter(const Emitter& emitter);
+    void removeEmitter(size_t index);
 
     const std::vector<Emitter>& getEmitters() const { return emitters; }
     const etna::Buffer& getParticleBuffer()   const { return particleBuffer; }
@@ -23,6 +24,7 @@ public:
     std::vector<Emitter> emitters;
     etna::Buffer particleBuffer;
 
-    static constexpr std::size_t N_PARTICLES_PER_EMITTER = 2500;
-    static constexpr std::size_t MAX_PARTICLES = 100'000;
+    uint32_t max_particlesPerEmitter = 2500;
+
+    static constexpr std::size_t MAX_PARTICLES = 500'000;
 };
