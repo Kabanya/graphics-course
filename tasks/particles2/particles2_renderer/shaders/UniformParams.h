@@ -11,6 +11,14 @@ struct PerlinParams
   shader_float scale;
 };
 
+struct ParticleGPU
+{
+  shader_vec3 position;
+  shader_float size;
+  shader_vec3 velocity;
+  shader_float lifetime;
+};
+
 struct UniformParams
 {
   shader_mat4 lightMatrix;

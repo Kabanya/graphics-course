@@ -2,7 +2,10 @@
 
 #include "WorldRenderer.hpp"
 
+#include <algorithm>
 #include <imgui.h>
+#include <etna/GlobalContext.hpp>
+#include "shaders/UniformParams.h"
 
 WorldRendererGui::WorldRendererGui(WorldRenderer& renderer) : renderer_(renderer) {}
 
@@ -50,7 +53,7 @@ void WorldRendererGui::drawGui()
   }
 }
 
-void WorldRendererGui::drawPerformanceTab()
+void WorldRendererGui::drawPerformanceTab() const
 {
   ImGui::Text(
     "Application average %.3f ms/frame (%.1f FPS)",
@@ -59,29 +62,27 @@ void WorldRendererGui::drawPerformanceTab()
   ImGui::Text("Rendered Instances: %u", renderer_.renderedInstances);
   std::size_t totalParticles = 0;
   for (const auto& emitter : renderer_.particleSystem->emitters)
-    totalParticles += emitter.particles.size();
+    totalParticles += emitter->particles.size();
   ImGui::Text("Total Particles: %zu", totalParticles);
   ImGui::Checkbox("Show FPS Milestones", &renderer_.showFpsMilestones);
   if (renderer_.showFpsMilestones)
   {
     for (const auto& [count, fps] : renderer_.fpsMilestones)
-    {
       ImGui::Text("FPS at %u particles: %.1f", count, fps);
-    }
   }
 }
 
 void WorldRendererGui::drawRenderTab()
 {
   ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Culling and Tessellation");
-  ImGui::Checkbox("Enable Frustum Culling", &renderer_.enableFrustumCulling);
-  ImGui::Checkbox("Enable Tessellation", &renderer_.enableTessellation);
+  ImGui::Checkbox   ("Enable Frustum Culling", &renderer_.enableFrustumCulling);
+  ImGui::Checkbox   ("Enable Tessellation", &renderer_.enableTessellation);
 
   ImGui::Separator();
   ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Rendering Options");
-  ImGui::Checkbox("Enable Avocados Rendering", &renderer_.enableSceneRendering);
-  ImGui::Checkbox("Enable Terrain Rendering", &renderer_.enableTerrainRendering);
-  ImGui::Checkbox("Enable Particle Rendering", &renderer_.enableParticleRendering);
+  ImGui::Checkbox   ("Enable Avocados Rendering", &renderer_.enableSceneRendering);
+  ImGui::Checkbox   ("Enable Terrain Rendering", &renderer_.enableTerrainRendering);
+  ImGui::Checkbox   ("Enable Particle Rendering", &renderer_.enableParticleRendering);
 
   ImGui::Separator();
   ImGui::Text("Camera Speed");
@@ -104,10 +105,10 @@ void WorldRendererGui::drawTerrainTab()
   ImGui::SliderFloat3("Light source position", pos, -10.f, 10.f);
   renderer_.uniformParams.lightPos = {pos[0], pos[1], pos[2]};
 
-  ImGui::InputInt("Terrain Texture Width", (int*)&renderer_.terrainTextureSizeWidth);
-  ImGui::InputInt("Terrain Texture Height", (int*)&renderer_.terrainTextureSizeHeight);
-  ImGui::InputInt("Compute Workgroup Size", (int*)&renderer_.computeWorkgroupSize);
-  ImGui::InputInt("Patch Subdivision", (int*)&renderer_.patchSubdivision);
+  ImGui::InputInt("Terrain Texture Width", reinterpret_cast<int*>(&renderer_.terrainTextureSizeWidth));
+  ImGui::InputInt("Terrain Texture Height", reinterpret_cast<int*>(&renderer_.terrainTextureSizeHeight));
+  ImGui::InputInt("Compute Workgroup Size", reinterpret_cast<int*>(&renderer_.computeWorkgroupSize));
+  ImGui::InputInt("Patch Subdivision", reinterpret_cast<int*>(&renderer_.patchSubdivision));
   renderer_.groupCountX = (renderer_.terrainTextureSizeWidth + renderer_.computeWorkgroupSize - 1) / renderer_.computeWorkgroupSize;
   renderer_.groupCountY = (renderer_.terrainTextureSizeHeight + renderer_.computeWorkgroupSize - 1) / renderer_.computeWorkgroupSize;
   ImGui::Text("Group Count X: %u", renderer_.groupCountX);
@@ -115,7 +116,7 @@ void WorldRendererGui::drawTerrainTab()
   ImGui::Separator();
 
   ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Perlin Noise Parameters");
-  ImGui::SliderInt("Octaves", (int*)&renderer_.perlinParams.octaves, 1, 20);
+  ImGui::SliderInt  ("Octaves", reinterpret_cast<int*>(&renderer_.perlinParams.octaves), 1, 20);
   ImGui::SliderFloat("Amplitude", &renderer_.perlinParams.amplitude, 0.0f, 1.0f);
   ImGui::SliderFloat("Frequency Multiplier", &renderer_.perlinParams.frequencyMultiplier, 1.0f, 4.0f);
   ImGui::SliderFloat("Scale", &renderer_.perlinParams.scale, 1.0f, 20.0f);
@@ -132,23 +133,32 @@ void WorldRendererGui::drawParticlesTab()
     "Particle Color", particleColor, ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoInputs);
   renderer_.uniformParams.particleColor = {particleColor[0], particleColor[1], particleColor[2]};
   ImGui::SliderFloat3("Wind", &renderer_.wind.x, -5.0f, 5.0f);
-  ImGui::SliderInt("Max Particles per Emitter", (int*)&renderer_.particleSystem->max_particlesPerEmitter, 0, 10000);
+  ImGui::SliderInt("Max Particles per Emitter", reinterpret_cast<int*>(&renderer_.particleSystem->max_particlesPerEmitter), 0, 10000);
 
   static int numEmitters = 10;
   ImGui::InputInt("Number of Emitters to Add", &numEmitters, 5, 25);
-  if (numEmitters < 1) numEmitters = 1;
+  numEmitters = std::max(numEmitters, 1);
 
   if (ImGui::Button("Add Emitter"))
   {
     Emitter e;
-    e.position = {0, 0, 0};
-    e.spawnFrequency = 10.0f;
+    e.position         = {0, 0, 0};
+    e.spawnFrequency   = 10.0f;
     e.particleLifetime = 5.0f;
-    e.initialVelocity = {0, 10, 0};
-    e.gravity = {0, -9.8f, 0};
-    e.drag = 0.1f;
-    e.size = 5.0f;
-    renderer_.particleSystem->addEmitter(e);
+    e.initialVelocity  = {0, 10, 0};
+    e.gravity          = {0, -9.8f, 0};
+    e.drag             = 0.1f;
+    e.size             = 5.0f;
+    e.maxParticles     = renderer_.particleSystem->max_particlesPerEmitter;
+    etna::Buffer::CreateInfo bufferInfo{
+        .size = e.maxParticles * sizeof(ParticleGPU),
+        .bufferUsage = vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
+        .memoryUsage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
+        .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+        .name = "emitter_particle_buffer",
+    };
+    e.particleBuffer = etna::get_context().createBuffer(bufferInfo);
+    renderer_.particleSystem->addEmitter(std::move(e));
   }
 
   if (ImGui::Button("Add Many Emitters"))
@@ -163,45 +173,49 @@ void WorldRendererGui::drawParticlesTab()
       e.gravity = {0, -9.8f, 0};
       e.drag = 0.1f;
       e.size = 5.0f;
-      renderer_.particleSystem->addEmitter(e);
+      e.maxParticles = renderer_.particleSystem->max_particlesPerEmitter;
+      etna::Buffer::CreateInfo bufferInfo{
+          .size = e.maxParticles * sizeof(ParticleGPU),
+          .bufferUsage = vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
+          .memoryUsage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
+          .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+          .name = "emitter_particle_buffer",
+      };
+      e.particleBuffer = etna::get_context().createBuffer(bufferInfo);
+      renderer_.particleSystem->addEmitter(std::move(e));
     }
   }
 
-  if (ImGui::Button("Clear All Emitters"))
+  if (ImGui::Button("Remove All Emitters"))
   {
-    renderer_.particleSystem->emitters.clear();
+    renderer_.clearAllEmitters = true;
   }
 
-  std::vector<size_t> emittersToRemove;
   int i = 0;
   for (auto& emitter : renderer_.particleSystem->emitters)
   {
     ImGui::PushID(i);
-    ImGui::Text("Emitter %d", i);
-    ImGui::SliderFloat3("Position", &emitter.position.x, -10, 10);
-    ImGui::SliderFloat("Spawn Frequency", &emitter.spawnFrequency, 0.1f, 500.0f);
-    ImGui::SliderFloat("Particle Lifetime", &emitter.particleLifetime, 0.1f, 25.0f);
-    ImGui::SliderFloat3("Initial Velocity", &emitter.initialVelocity.x, -15, 15);
-    ImGui::SliderFloat3("Gravity", &emitter.gravity.x, -2, 2);
-    ImGui::SliderFloat("Drag", &emitter.drag, 0.0f, 1.0f);
-    ImGui::SliderFloat("Size", &emitter.size, 1.0f, 50.0f);
+    ImGui::Text        ("Emitter %d", i);
+    ImGui::SliderFloat3("Position",          &emitter->position.x, -10, 10);
+    ImGui::SliderFloat ("Spawn Frequency",   &emitter->spawnFrequency, 0.1f, 500.0f);
+    ImGui::SliderFloat ("Particle Lifetime", &emitter->particleLifetime, 0.1f, 25.0f);
+    ImGui::SliderFloat3("Initial Velocity",  &emitter->initialVelocity.x, -15, 15);
+    ImGui::SliderFloat3("Gravity",           &emitter->gravity.x, -2, 2);
+    ImGui::SliderFloat ("Drag",              &emitter->drag, 0.0f, 1.0f);
+    ImGui::SliderFloat ("Size",              &emitter->size, 1.0f, 50.0f);
     if (ImGui::Button("Clear Particles"))
-      emitter.clearParticles();
+      emitter->clearParticles();
     ImGui::SameLine();
     if (ImGui::Button("Remove Emitter"))
-      emittersToRemove.push_back(i);
+      renderer_.emittersToRemove.push_back(i);
     ImGui::SameLine();
-    ImGui::Text("Particles: %zu", emitter.particles.size());
+    ImGui::Text("Particles: %zu", emitter->particles.size());
     ImGui::PopID();
     i++;
   }
-
-  std::sort(emittersToRemove.rbegin(), emittersToRemove.rend());
-  for (auto idx : emittersToRemove)
-    renderer_.particleSystem->removeEmitter(idx);
 }
 
-void WorldRendererGui::drawInfoTab()
+void WorldRendererGui::drawInfoTab() const
 {
   ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Press 'B' to recompile and reload shaders");
 

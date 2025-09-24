@@ -9,6 +9,8 @@
 #include <algorithm>
 #include <vector>
 
+#include "shaders/UniformParams.h"
+
 WorldRenderer::WorldRenderer()
   : sceneMgr{std::make_unique<SceneManager>()}
 {
@@ -100,7 +102,7 @@ void WorldRenderer::loadScene(std::filesystem::path path)
   auto instanceCount = sceneMgr->getInstanceMatrices().size();
   if (instanceCount > maxInstances)
   {
-    maxInstances = static_cast<uint32_t>(instanceCount);
+    maxInstances = static_cast<std::uint32_t>(instanceCount);
 
     instanceMatricesBuffer = {};
     persistentMapping = nullptr;
@@ -153,14 +155,6 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
 
   particleSystem = std::make_unique<ParticleSystem>();
 
-  particleSystem->particleBuffer = ctx.createBuffer(etna::Buffer::CreateInfo{
-    .size = ParticleSystem::MAX_PARTICLES * sizeof(glm::vec4),
-    .bufferUsage = vk::BufferUsageFlagBits::eVertexBuffer,
-    .memoryUsage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
-    .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-    .name = "particle_positions",
-  });
-
   staticMeshPipeline = {};
   staticMeshPipeline = pipelineManager.createGraphicsPipeline(
     "static_mesh_material",
@@ -204,11 +198,17 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
       .vertexShaderInput = etna::VertexShaderInputDescription{
         .bindings = {etna::VertexShaderInputDescription::Binding{
           .byteStreamDescription = etna::VertexByteStreamFormatDescription{
-            .stride = sizeof(glm::vec4),
-            .attributes = {etna::VertexByteStreamFormatDescription::Attribute{
-              .format = vk::Format::eR32G32B32A32Sfloat,
-              .offset = 0,
-            }},
+            .stride = sizeof(ParticleGPU),
+            .attributes = {
+              etna::VertexByteStreamFormatDescription::Attribute{
+                .format = vk::Format::eR32G32B32Sfloat,
+                .offset = 0,
+              },
+              etna::VertexByteStreamFormatDescription::Attribute{
+                .format = vk::Format::eR32Sfloat,
+                .offset = 12,
+              },
+            },
           },
         }},
       },
@@ -306,6 +306,19 @@ void WorldRenderer::update(const FramePacket& packet)
 {
   ZoneScoped;
 
+  // safety deleting emitters
+  if (clearAllEmitters)
+  {
+    for (auto& e : particleSystem->emitters)
+      particleSystem->pendingDestruction.push_back(std::move(e));
+    particleSystem->emitters.clear();
+    clearAllEmitters = false;
+  }
+  std::sort(emittersToRemove.rbegin(), emittersToRemove.rend());
+  for (auto idx : emittersToRemove)
+    particleSystem->removeEmitter(idx);
+  emittersToRemove.clear();
+
   // calc camera matrix
   {
     const float aspect = float(resolution.x) / float(resolution.y);
@@ -321,7 +334,7 @@ void WorldRenderer::update(const FramePacket& packet)
 
   totalParticles = 0;
   for (const auto& emitter : particleSystem->emitters)
-    totalParticles += emitter.particles.size();
+    totalParticles += emitter->particles.size();
   while (totalParticles >= nextMilestone && fpsMilestones.find(nextMilestone) == fpsMilestones.end())
   {
     fpsMilestones[nextMilestone] = ImGui::GetIO().Framerate;
@@ -347,16 +360,16 @@ void WorldRenderer::update(const FramePacket& packet)
     return;
 
   const size_t instanceCount = instanceMeshes.size();
-  static std::vector<std::pair<uint32_t, uint32_t>> meshInstancePairs;
+  static std::vector<std::pair<std::uint32_t, std::uint32_t>> meshInstancePairs;
   meshInstancePairs.clear();
   meshInstancePairs.reserve(instanceCount);
 
   for (size_t i = 0; i < instanceCount; ++i)
-    meshInstancePairs.emplace_back(instanceMeshes[i], static_cast<uint32_t>(i));
+    meshInstancePairs.emplace_back(instanceMeshes[i], static_cast<std::uint32_t>(i));
 
   std::sort(meshInstancePairs.begin(), meshInstancePairs.end());
 
-  static std::vector<std::pair<uint32_t, uint32_t>> visiblePairs;
+  static std::vector<std::pair<std::uint32_t, std::uint32_t>> visiblePairs;
   visiblePairs.clear();
   visiblePairs.reserve(instanceCount);
 
@@ -373,9 +386,9 @@ void WorldRenderer::update(const FramePacket& packet)
       const auto& bboxes = sceneMgr->getRelemsBoundingBoxes();
       const auto& mesh = meshes[meshIdx];
 
-      for (uint32_t j = 0; j < mesh.relemCount; ++j)
+      for (std::uint32_t j = 0; j < mesh.relemCount; ++j)
       {
-        uint32_t relemIdx = mesh.firstRelem + j;
+        std::uint32_t relemIdx = mesh.firstRelem + j;
         const auto& bbox = bboxes[relemIdx];
         glm::vec3 min(bbox.aabb.minX, bbox.aabb.minY, bbox.aabb.minZ);
         glm::vec3 max(bbox.aabb.maxX, bbox.aabb.maxY, bbox.aabb.maxZ);
@@ -402,8 +415,8 @@ void WorldRenderer::update(const FramePacket& packet)
 
   if (meshInstancePairs.empty())
     return;
-  uint32_t currentMesh = meshInstancePairs[0].first;
-  uint32_t groupStart = 0;
+  std::uint32_t currentMesh = meshInstancePairs[0].first;
+  std::uint32_t groupStart = 0;
 
   for (size_t i = 0; i < meshInstancePairs.size(); ++i)
   {
@@ -412,7 +425,7 @@ void WorldRenderer::update(const FramePacket& packet)
 
     if (meshIdx != currentMesh || i == meshInstancePairs.size() - 1)
     {
-      uint32_t groupSize = static_cast<uint32_t>(i) - groupStart;
+      std::uint32_t groupSize = static_cast<uint32_t>(i) - groupStart;
       if (meshIdx == currentMesh && i == meshInstancePairs.size() - 1)
         groupSize++;
 

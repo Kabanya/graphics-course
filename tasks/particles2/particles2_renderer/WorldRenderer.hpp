@@ -20,9 +20,9 @@
 
 struct InstanceGroup
 {
-  uint32_t meshIdx;
-  uint32_t firstInstance;
-  uint32_t instanceCount;
+  std::uint32_t meshIdx;
+  std::uint32_t firstInstance;
+  std::uint32_t instanceCount;
 };
 
 enum class CameraSpeedLevel
@@ -76,8 +76,8 @@ private:
   void* persistentMapping = nullptr;
   void* uniformMapping = nullptr;
   void* perlinValuesMapping = nullptr;
-  uint32_t maxInstances = 0;
-  uint32_t max_particles = 10000;
+  std::uint32_t maxInstances = 0;
+  std::uint32_t max_particles = 10000;
 
   std::vector<InstanceGroup> instanceGroups;
   std::vector<glm::mat4> instanceMatrices;
@@ -133,10 +133,12 @@ private:
   bool enableSceneRendering    = true;
   bool enableParticleRendering = true;
 
-  bool showPerformanceInfo    = true;
-  bool showTerrainSettings    = true;
-  bool drawDebugTerrainQuad   = false;
-  bool showTabs               = true;
+  bool showPerformanceInfo     = true;
+  bool showTerrainSettings     = true;
+  bool drawDebugTerrainQuad    = false;
+  bool showTabs                = true;
+  bool showFpsMilestones       = true;
+  bool clearAllEmitters        = false;
 
   CameraSpeedLevel cameraSpeedLevel = CameraSpeedLevel::Middle;
 
@@ -149,11 +151,10 @@ private:
   std::uint32_t groupCountX;
   std::uint32_t groupCountY;
 
-  uint32_t renderedInstances = 0;
+  std::uint32_t renderedInstances = 0;
 
-  uint32_t totalParticles = 0;
-  uint32_t nextMilestone = 5000;
-  std::map<uint32_t, float> fpsMilestones;
-
-  bool showFpsMilestones = true;
+  std::size_t totalParticles  = 0;
+  std::uint32_t nextMilestone = 5000;
+  std::map<std::uint32_t, float> fpsMilestones;
+  std::vector<size_t> emittersToRemove;
 };
