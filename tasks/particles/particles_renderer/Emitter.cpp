@@ -15,26 +15,26 @@ void Emitter::update(float dt, uint32_t max_particles, glm::vec3 wind)
   particles.erase(
   std::remove_if(particles.begin(), particles.end(),
     [dt, this, wind](Particle& p) {
-      auto pos = p.getPosition();
-      auto vel = p.getVelocity();
+      auto pos = p.position;
+      auto vel = p.velocity;
       pos += vel * dt;
       vel += (gravity + wind) * dt - drag * vel * dt;
-      p.setPosition(pos);
-      p.setVelocity(vel);
-      p.setRemainingLifetime(p.getRemainingLifetime() - dt);
-      return p.getRemainingLifetime() <= 0.0f;
+      p.position = pos;
+      p.velocity = vel;
+      p.remainingLifetime -= dt;
+      return p.remainingLifetime <= 0.0f;
     }),
-particles.end()
+    particles.end()
   );
 }
 
 void Emitter::spawnParticle()
 {
   Particle p;
-  p.setPosition(position);
-  p.setVelocity(initialVelocity);
-  p.setRemainingLifetime(particleLifetime);
-  p.setSize(size);
+  p.position = position;
+  p.velocity = initialVelocity;
+  p.remainingLifetime = particleLifetime;
+  p.size = size;
   particles.push_back(p);
 }
 

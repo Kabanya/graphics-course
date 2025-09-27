@@ -26,14 +26,14 @@ void ParticleSystem::render(vk::CommandBuffer cmd_buf, glm::vec3 cam_pos)
       continue;
 
     std::sort(emitter.particles.begin(), emitter.particles.end(), [cam_pos](const Particle& a, const Particle& b) {
-      return glm::distance(a.getPosition(), cam_pos) > glm::distance(b.getPosition(), cam_pos);
+      return glm::distance(a.position, cam_pos) > glm::distance(b.position, cam_pos);
     });
 
     for (const auto& particle : emitter.particles)
     {
       if (totalParticles >= MAX_PARTICLES)
         break;
-      particleData[totalParticles] = glm::vec4(particle.getPosition(), particle.getSize());
+      particleData[totalParticles] = glm::vec4(particle.position, particle.size);
       ++totalParticles;
     }
   }
