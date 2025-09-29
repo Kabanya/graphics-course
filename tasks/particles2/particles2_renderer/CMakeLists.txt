@@ -26,4 +26,6 @@ target_add_shaders(particles2_renderer
   shaders/quad.vert
   shaders/particle.frag
   shaders/particle.vert
+  shaders/particle_calculate.comp
+  shaders/particle_integrate.comp
 )

@@ -46,17 +46,15 @@ public:
 
   void debugInput(const Keyboard& kb);
   void update(const FramePacket& packet);
-  void drawGui();
-  void renderWorld(
-    vk::CommandBuffer cmd_buf, vk::Image target_image, vk::ImageView target_image_view);
+  void drawGui() const;
+  void renderWorld(vk::CommandBuffer cmd_buf, vk::Image target_image, vk::ImageView target_image_view);
 
   float getCameraSpeed() const;
 
 private:
-  void renderScene(
-    vk::CommandBuffer cmd_buf, vk::PipelineLayout pipeline_layout);
+  void renderScene(vk::CommandBuffer cmd_buf, vk::PipelineLayout pipeline_layout);
   void createTerrainMap(vk::CommandBuffer cmd_buf);
-  void renderTerrain(vk::CommandBuffer cmd_buf);
+  void renderTerrain(vk::CommandBuffer cmd_buf) const;
   void reallocateTerrainResources();
   void regenerateTerrain();
 
@@ -72,12 +70,26 @@ private:
   etna::Buffer constants;
   etna::Buffer uniformParamsBuffer;
   etna::Buffer perlinValuesBuffer;
+  etna::Buffer particleSSBO;
+  etna::Buffer particleUBO;
 
   void* persistentMapping = nullptr;
   void* uniformMapping = nullptr;
   void* perlinValuesMapping = nullptr;
+  void* particleSSBOMapping = nullptr;
   std::uint32_t maxInstances = 0;
   std::uint32_t max_particles = 10000;
+
+  struct ParticleUBO {
+    float deltaT;
+    uint32_t particleCount;
+    glm::vec3 gravity;
+    glm::vec3 wind;
+    float drag;
+  };
+
+  ParticleUBO particleUbo;
+  std::vector<ParticleGPU> cpuParticles;
 
   std::vector<InstanceGroup> instanceGroups;
   std::vector<glm::mat4> instanceMatrices;
@@ -92,6 +104,8 @@ private:
   etna::ComputePipeline normalPipeline{};
   etna::GraphicsPipeline terrainPipeline{};
   etna::GraphicsPipeline particlePipeline{};
+  etna::ComputePipeline particleCalculatePipeline{};
+  etna::ComputePipeline particleIntegratePipeline{};
 
   std::unique_ptr<QuadRenderer> quadRenderer;
 
@@ -157,4 +171,5 @@ private:
   std::uint32_t nextMilestone = 5000;
   std::map<std::uint32_t, float> fpsMilestones;
   std::vector<size_t> emittersToRemove;
+  std::uint32_t currentParticleCount = 0;
 };

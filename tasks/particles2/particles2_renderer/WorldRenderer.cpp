@@ -1,12 +1,12 @@
 #include "WorldRenderer.hpp"
 
+#include <algorithm>
 #include <etna/GlobalContext.hpp>
 #include <etna/PipelineManager.hpp>
-#include <etna/RenderTargetStates.hpp>
 #include <etna/Profiling.hpp>
+#include <etna/RenderTargetStates.hpp>
 #include <glm/ext.hpp>
 #include <imgui.h>
-#include <algorithm>
 #include <vector>
 
 #include "shaders/UniformParams.h"
@@ -19,7 +19,7 @@ WorldRenderer::WorldRenderer()
   groupCountY = (terrainTextureSizeHeight + computeWorkgroupSize - 1) / computeWorkgroupSize;
 }
 
-void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
+void WorldRenderer::allocateResources(const glm::uvec2 swapchain_resolution)
 {
   resolution = swapchain_resolution;
 
@@ -63,9 +63,27 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
 
   std::memcpy(perlinValuesMapping, &perlinParams, sizeof(PerlinParams));
 
+  particleSSBO = ctx.createBuffer(etna::Buffer::CreateInfo{
+    .size = max_particles * sizeof(ParticleGPU),
+    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eVertexBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+    .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+    .name = "particle_ssbo",
+  });
+  particleSSBOMapping = particleSSBO.map();
+
+  particleUBO = ctx.createBuffer(etna::Buffer::CreateInfo{
+    .size = sizeof(ParticleUBO),
+    .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+    .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+    .name = "particle_ubo",
+  });
+
+  cpuParticles.resize(max_particles);
+
   maxInstances = 1;
-  instanceMatricesBuffer = ctx.createBuffer(etna::Buffer::CreateInfo
-  {
+  instanceMatricesBuffer = ctx.createBuffer(etna::Buffer::CreateInfo{
     .size = maxInstances * sizeof(glm::mat4x4),
     .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
     .memoryUsage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
@@ -135,6 +153,8 @@ void WorldRenderer::loadShaders()
      PARTICLES2_RENDERER_SHADERS_ROOT "terrain.tese.spv",
      PARTICLES2_RENDERER_SHADERS_ROOT "terrain.frag.spv"});
   etna::create_program("particle_render", {PARTICLES2_RENDERER_SHADERS_ROOT "particle.frag.spv", PARTICLES2_RENDERER_SHADERS_ROOT "particle.vert.spv"});
+  etna::create_program("particle_calculate", {PARTICLES2_RENDERER_SHADERS_ROOT "particle_calculate.comp.spv"});
+  etna::create_program("particle_integrate", {PARTICLES2_RENDERER_SHADERS_ROOT "particle_integrate.comp.spv"});
 }
 
 void WorldRenderer::setupPipelines(vk::Format swapchain_format)
@@ -154,6 +174,14 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
   });
 
   particleSystem = std::make_unique<ParticleSystem>();
+
+  particleSystem->particleBuffer = ctx.createBuffer(etna::Buffer::CreateInfo{
+    .size = max_particles * sizeof(ParticleGPU),
+    .bufferUsage = vk::BufferUsageFlagBits::eVertexBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+    .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+    .name = "particle_vertex_buffer",
+  });
 
   staticMeshPipeline = {};
   staticMeshPipeline = pipelineManager.createGraphicsPipeline(
@@ -175,6 +203,8 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
     });
   perlinPipeline = pipelineManager.createComputePipeline("perlin_terrain", {});
   normalPipeline = pipelineManager.createComputePipeline("normal_map_generation", {});
+  particleCalculatePipeline = pipelineManager.createComputePipeline("particle_calculate", {});
+  particleIntegratePipeline = pipelineManager.createComputePipeline("particle_integrate", {});
   terrainPipeline = pipelineManager.createGraphicsPipeline(
     "terrain_render",
     etna::GraphicsPipeline::CreateInfo{
@@ -201,12 +231,8 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
             .stride = sizeof(ParticleGPU),
             .attributes = {
               etna::VertexByteStreamFormatDescription::Attribute{
-                .format = vk::Format::eR32G32B32Sfloat,
+                .format = vk::Format::eR32G32B32A32Sfloat,
                 .offset = 0,
-              },
-              etna::VertexByteStreamFormatDescription::Attribute{
-                .format = vk::Format::eR32Sfloat,
-                .offset = 12,
               },
             },
           },
@@ -242,9 +268,10 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
     });
 }
 
-bool WorldRenderer::isVisibleBoundingBox(const glm::vec3& min, const glm::vec3& max, const glm::mat4& mvp) const
+bool WorldRenderer::isVisibleBoundingBox(
+  const glm::vec3& min, const glm::vec3& max, const glm::mat4& mvp) const
 {
-  std::array<glm::vec3, 8> vertices =
+  const std::array<glm::vec3, 8> vertices =
   {
     glm::vec3(min.x, min.y, min.z),
     glm::vec3(min.x, min.y, max.z),
@@ -256,18 +283,18 @@ bool WorldRenderer::isVisibleBoundingBox(const glm::vec3& min, const glm::vec3& 
     glm::vec3(max.x, max.y, max.z),
   };
 
-  for (const auto& v : vertices)
+  return std::ranges::any_of(vertices, [&](const glm::vec3& v)
   {
-    glm::vec4 clip = mvp * glm::vec4(v, 1.0f);
-    if (clip.w != 0.0f) {
-      float x = clip.x / clip.w;
-      float y = clip.y / clip.w;
-      float z = clip.z / clip.w;
-      if (x >= -1.0f && x <= 1.0f && y >= -1.0f && y <= 1.0f && z >= 0.0f && z <= 1.0f)
-        return true;
-    }
-  }
-  return false;
+      glm::vec4 clip = mvp * glm::vec4(v, 1.0f);
+      if (clip.w != 0.0f)
+      {
+        float x = clip.x / clip.w;
+        float y = clip.y / clip.w;
+        float z = clip.z / clip.w;
+        return x >= -1.0f && x <= 1.0f && y >= -1.0f && y <= 1.0f && z >= 0.0f && z <= 1.0f;
+      }
+    return false;
+  });
 }
 
 void WorldRenderer::debugInput(const Keyboard& kb)
@@ -312,9 +339,10 @@ void WorldRenderer::update(const FramePacket& packet)
     for (auto& e : particleSystem->emitters)
       particleSystem->pendingDestruction.push_back(std::move(e));
     particleSystem->emitters.clear();
+    particleUbo.particleCount = 0;
     clearAllEmitters = false;
   }
-  std::sort(emittersToRemove.rbegin(), emittersToRemove.rend());
+  std::ranges::sort(emittersToRemove);
   for (auto idx : emittersToRemove)
     particleSystem->removeEmitter(idx);
   emittersToRemove.clear();
@@ -330,11 +358,113 @@ void WorldRenderer::update(const FramePacket& packet)
 
   float dt = packet.currentTime - previousTime;
   previousTime = packet.currentTime;
-  particleSystem->update(dt, wind);
 
-  totalParticles = 0;
-  for (const auto& emitter : particleSystem->emitters)
-    totalParticles += emitter->particles.size();
+  // GPU particle update
+  std::uint32_t particleCount = 0;
+  ParticleGPU* ssbo = static_cast<ParticleGPU*>(particleSSBOMapping);
+  for (auto& emitter : particleSystem->emitters)
+  {
+    for (auto& p : emitter->particles)
+    {
+      if (particleCount < max_particles)
+      {
+        ssbo[particleCount] = {glm::vec4(p.position, p.size), glm::vec4(p.velocity, p.remainingLifetime)};
+        particleCount++;
+      }
+    }
+  }
+
+  // Spawn new particles
+  for (auto& emitter : particleSystem->emitters)
+  {
+    emitter->timeSinceLastSpawn += dt;
+    float spawnInterval = 1.0f / emitter->spawnFrequency;
+    while (emitter->timeSinceLastSpawn >= spawnInterval && particleCount < max_particles)
+    {
+      Particle p;
+      p.position = emitter->position;
+      p.velocity = emitter->initialVelocity;
+      p.remainingLifetime = emitter->particleLifetime;
+      p.size = emitter->size;
+      ssbo[particleCount] = {glm::vec4(p.position, p.size), glm::vec4(p.velocity, p.remainingLifetime)};
+      particleCount++;
+      emitter->timeSinceLastSpawn -= spawnInterval;
+    }
+  }
+
+  currentParticleCount = particleCount;
+
+  particleUbo.deltaT = dt;
+  particleUbo.particleCount = static_cast<uint32_t>(particleCount);
+  particleUbo.gravity = glm::vec3(0.0f, 0.0f, 0.0f);
+  particleUbo.wind = wind;
+  particleUbo.drag = 0.0f;
+
+  if (particleCount > 0)
+  {
+    memcpy(particleUBO.map(), &particleUbo, sizeof(ParticleUBO));
+    particleUBO.unmap();
+
+    // Dispatch compute
+    auto& ctx = etna::get_context();
+    auto cmdManager = ctx.createOneShotCmdMgr();
+    auto cmdBuf = cmdManager->start();
+    ETNA_CHECK_VK_RESULT(cmdBuf.begin(vk::CommandBufferBeginInfo{}));
+
+    ETNA_PROFILE_GPU(cmdBuf, particleGPUUpdate);
+
+    auto calculateInfo = etna::get_shader_program("particle_calculate");
+    auto descSetCalculate = etna::create_descriptor_set(
+      calculateInfo.getDescriptorLayoutId(0),
+      cmdBuf,
+      {
+        etna::Binding{0, particleSSBO.genBinding()},
+        etna::Binding{1, particleUBO.genBinding()},
+      });
+    cmdBuf.bindPipeline(vk::PipelineBindPoint::eCompute, particleCalculatePipeline.getVkPipeline());
+    cmdBuf.bindDescriptorSets(vk::PipelineBindPoint::eCompute, particleCalculatePipeline.getVkPipelineLayout(), 0, {descSetCalculate.getVkSet()}, {});
+    cmdBuf.dispatch((particleCount + 31) / 32, 1, 1);
+
+    auto integrateInfo = etna::get_shader_program("particle_integrate");
+    auto descSetIntegrate = etna::create_descriptor_set(
+      integrateInfo.getDescriptorLayoutId(0),
+      cmdBuf,
+      {
+        etna::Binding{0, particleSSBO.genBinding()},
+        etna::Binding{1, particleUBO.genBinding()},
+      });
+    cmdBuf.bindPipeline(vk::PipelineBindPoint::eCompute, particleIntegratePipeline.getVkPipeline());
+    cmdBuf.bindDescriptorSets(vk::PipelineBindPoint::eCompute, particleIntegratePipeline.getVkPipelineLayout(), 0, {descSetIntegrate.getVkSet()}, {});
+    cmdBuf.dispatch((particleCount + 31) / 32, 1, 1);
+
+    ETNA_CHECK_VK_RESULT(cmdBuf.end());
+    cmdManager->submitAndWait(cmdBuf);
+
+    // Copy back
+    memcpy(cpuParticles.data(), particleSSBOMapping, particleCount * sizeof(ParticleGPU));
+  }
+
+  // Update emitters particles from cpuParticles
+  size_t idx = 0;
+  for (auto& emitter : particleSystem->emitters)
+  {
+    emitter->particles.clear();
+    while (idx < particleCount && emitter->particles.size() < emitter->maxParticles)
+    {
+      if (cpuParticles[idx].vel.w > 0)
+      {
+        Particle p;
+        p.position = glm::vec3(cpuParticles[idx].pos);
+        p.velocity = glm::vec3(cpuParticles[idx].vel);
+        p.remainingLifetime = cpuParticles[idx].vel.w;
+        p.size = cpuParticles[idx].pos.w;
+        emitter->particles.push_back(p);
+      }
+      idx++;
+    }
+  }
+
+  totalParticles = particleCount;
   while (totalParticles >= nextMilestone && fpsMilestones.find(nextMilestone) == fpsMilestones.end())
   {
     fpsMilestones[nextMilestone] = ImGui::GetIO().Framerate;
@@ -367,7 +497,7 @@ void WorldRenderer::update(const FramePacket& packet)
   for (size_t i = 0; i < instanceCount; ++i)
     meshInstancePairs.emplace_back(instanceMeshes[i], static_cast<std::uint32_t>(i));
 
-  std::sort(meshInstancePairs.begin(), meshInstancePairs.end());
+  std::ranges::sort(meshInstancePairs);
 
   static std::vector<std::pair<std::uint32_t, std::uint32_t>> visiblePairs;
   visiblePairs.clear();
@@ -520,8 +650,7 @@ void WorldRenderer::renderScene(
 void WorldRenderer::renderWorld(
   vk::CommandBuffer cmd_buf, vk::Image target_image, vk::ImageView target_image_view)
 {
-  ETNA_PROFILE_GPU(cmd_buf, renderWorld);
-
+  ETNA_PROFILE_GPU(cmd_buf, renderWorld)
   {
     etna::RenderTargetState renderTargets(
       cmd_buf,
@@ -564,14 +693,14 @@ void WorldRenderer::renderWorld(
         vk::PipelineBindPoint::eGraphics, particlePipeline.getVkPipelineLayout(), 0,
         {descSet.getVkSet()}, {});
     }
-    particleSystem->render(cmd_buf, camView);
+    particleSystem->render(cmd_buf, particleSSBO, currentParticleCount);
   }
 
   if (drawDebugTerrainQuad)
     quadRenderer->render(cmd_buf, target_image, target_image_view, perlinTerrainImage, defaultSampler);
 }
 
-void WorldRenderer::renderTerrain(vk::CommandBuffer cmd_buf)
+void WorldRenderer::renderTerrain(vk::CommandBuffer cmd_buf) const
 {
   auto info = etna::get_shader_program("terrain_render");
   auto perlinBind = perlinTerrainImage.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal);
@@ -605,7 +734,7 @@ void WorldRenderer::regenerateTerrain()
   cmdManager->submitAndWait(cmdBuf);
 }
 
-void WorldRenderer::createTerrainMap(vk::CommandBuffer cmd_buf)
+void WorldRenderer::createTerrainMap(const vk::CommandBuffer cmd_buf)
 {
   etna::set_state(
     cmd_buf,
@@ -630,7 +759,7 @@ void WorldRenderer::createTerrainMap(vk::CommandBuffer cmd_buf)
         etna::Binding{1, perlinValuesBuffer.genBinding()},
       });
 
-    vk::DescriptorSet vkSet = set.getVkSet();
+    const vk::DescriptorSet vkSet = set.getVkSet();
 
     cmd_buf.bindPipeline(vk::PipelineBindPoint::eCompute, perlinPipeline.getVkPipeline());
     cmd_buf.bindDescriptorSets(
@@ -719,11 +848,11 @@ float WorldRenderer::getCameraSpeed() const
     case CameraSpeedLevel::Fast:
       return 50.0f;
     default:
-      return 50.0f;
+      return 40.0f;
   }
 }
 
-void WorldRenderer::drawGui()
+void WorldRenderer::drawGui() const
 {
   gui->drawGui();
 }

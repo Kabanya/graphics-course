@@ -13,10 +13,8 @@ struct PerlinParams
 
 struct ParticleGPU
 {
-  shader_vec3 position;
-  shader_float size;
-  shader_vec3 velocity;
-  shader_float lifetime;
+  shader_vec4 pos;
+  shader_vec4 vel;
 };
 
 struct UniformParams

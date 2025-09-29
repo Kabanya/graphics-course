@@ -14,9 +14,11 @@ public:
   ~ParticleSystem() = default;
 
   void update(float dt, glm::vec3 wind);
-  void render(vk::CommandBuffer cmd_buf, glm::vec3 cam_pos);
+  void render(vk::CommandBuffer cmd_buf, etna::Buffer& buffer, uint32_t particle_count);
   void addEmitter(Emitter emitter);
   void removeEmitter(size_t index);
+
+  etna::Buffer particleBuffer;
 
   glm::vec3 wind = {0.0f, 0.0f, 0.0f};
 

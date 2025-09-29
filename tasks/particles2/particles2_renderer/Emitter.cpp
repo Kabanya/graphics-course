@@ -1,6 +1,4 @@
 #include "Emitter.hpp"
-#include <algorithm>
-
 
 void Emitter::update(float dt, const std::uint32_t max_particles, glm::vec3 wind)
 {
