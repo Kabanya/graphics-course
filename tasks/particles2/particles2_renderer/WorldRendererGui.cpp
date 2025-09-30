@@ -60,10 +60,7 @@ void WorldRendererGui::drawPerformanceTab() const
     1000.0f / ImGui::GetIO().Framerate,
     ImGui::GetIO().Framerate);
   ImGui::Text("Rendered Instances: %u", renderer_.renderedInstances);
-  std::size_t totalParticles = 0;
-  for (const auto& emitter : renderer_.particleSystem->emitters)
-    totalParticles += emitter->particles.size();
-  ImGui::Text("Total Particles: %zu", totalParticles);
+  ImGui::Text("Total Particles: %u", renderer_.currentParticleCount);
   ImGui::Checkbox("Show FPS Milestones", &renderer_.showFpsMilestones);
   if (renderer_.showFpsMilestones)
   {
@@ -150,14 +147,7 @@ void WorldRendererGui::drawParticlesTab()
     e.drag             = 0.1f;
     e.size             = 5.0f;
     e.maxParticles     = renderer_.particleSystem->max_particlesPerEmitter;
-    etna::Buffer::CreateInfo bufferInfo{
-        .size = e.maxParticles * sizeof(ParticleGPU),
-        .bufferUsage = vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
-        .memoryUsage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
-        .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-        .name = "emitter_particle_buffer",
-    };
-    e.particleBuffer = etna::get_context().createBuffer(bufferInfo);
+    e.createBuffer();
     renderer_.particleSystem->addEmitter(std::move(e));
   }
 
@@ -174,14 +164,7 @@ void WorldRendererGui::drawParticlesTab()
       e.drag = 0.1f;
       e.size = 5.0f;
       e.maxParticles = renderer_.particleSystem->max_particlesPerEmitter;
-      etna::Buffer::CreateInfo bufferInfo{
-          .size = e.maxParticles * sizeof(ParticleGPU),
-          .bufferUsage = vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
-          .memoryUsage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
-          .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-          .name = "emitter_particle_buffer",
-      };
-      e.particleBuffer = etna::get_context().createBuffer(bufferInfo);
+      e.createBuffer();
       renderer_.particleSystem->addEmitter(std::move(e));
     }
   }

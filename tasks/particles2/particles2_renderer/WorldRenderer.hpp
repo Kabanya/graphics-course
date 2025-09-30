@@ -38,7 +38,7 @@ class WorldRenderer
 public:
   explicit WorldRenderer();
 
-  void loadScene(std::filesystem::path path);
+  void loadScene(const std::filesystem::path& path);
 
   void loadShaders();
   void allocateResources(glm::uvec2 swapchain_resolution);
@@ -73,12 +73,19 @@ private:
   etna::Buffer particleSSBO;
   etna::Buffer particleUBO;
 
+  etna::Buffer emitterSSBO;
+  etna::Buffer particleCountBuffer;
+  etna::Buffer spawnUBO;
+
   void* persistentMapping = nullptr;
   void* uniformMapping = nullptr;
   void* perlinValuesMapping = nullptr;
   void* particleSSBOMapping = nullptr;
+  void* emitterSSBOMapping = nullptr;
+  void* particleCountMapping = nullptr;
+
   std::uint32_t maxInstances = 0;
-  std::uint32_t max_particles = 10000;
+  std::uint32_t max_particles = 5'000'000;
 
   struct ParticleUBO {
     float deltaT;
@@ -88,8 +95,23 @@ private:
     float drag;
   };
 
+    struct SpawnUBO {
+    float deltaTime;
+    uint32_t emitterCount;
+  };
+
+  struct EmitterGPU {
+    glm::vec3 position;
+    float timeSinceLastSpawn;
+    glm::vec3 initialVelocity;
+    float spawnFrequency;
+    float particleLifetime;
+    float size;
+    uint32_t maxParticles;
+    uint32_t currentParticles;
+  };
+
   ParticleUBO particleUbo;
-  std::vector<ParticleGPU> cpuParticles;
 
   std::vector<InstanceGroup> instanceGroups;
   std::vector<glm::mat4> instanceMatrices;
@@ -100,12 +122,13 @@ private:
   float farPlane;
 
   etna::GraphicsPipeline staticMeshPipeline{};
-  etna::ComputePipeline perlinPipeline{};
-  etna::ComputePipeline normalPipeline{};
+  etna::ComputePipeline  perlinPipeline{};
+  etna::ComputePipeline  normalPipeline{};
   etna::GraphicsPipeline terrainPipeline{};
   etna::GraphicsPipeline particlePipeline{};
-  etna::ComputePipeline particleCalculatePipeline{};
-  etna::ComputePipeline particleIntegratePipeline{};
+  etna::ComputePipeline  particleCalculatePipeline{};
+  etna::ComputePipeline  particleIntegratePipeline{};
+  etna::ComputePipeline  particleSpawnPipeline{};
 
   std::unique_ptr<QuadRenderer> quadRenderer;
 
@@ -122,19 +145,19 @@ private:
   };
 
   UniformParams uniformParams{
-    .lightMatrix = {},
-    .lightPos = {},
-    .time = {},
-    .baseColor = {0.9f, 0.92f, 1.0f},
+    .lightMatrix   = {},
+    .lightPos      = {},
+    .time          = {},
+    .baseColor     = {0.9f, 0.92f, 1.0f},
     .particleAlpha = 0.5f,
     .particleColor = {1.0f, 1.0f, 1.0f},
   };
 
   PerlinParams perlinParams{
-    .octaves = 10u,
-    .amplitude = 0.5f,
+    .octaves             = 10u,
+    .amplitude           = 0.5f,
     .frequencyMultiplier = 2.0f,
-    .scale = 8.0f,
+    .scale               = 8.0f,
   };
 
   etna::Sampler defaultSampler;

@@ -27,4 +27,5 @@ public:
   void update(float dt, std::uint32_t max_particles, glm::vec3 wind);
   void spawnParticle();
   void clearParticles();
+  void createBuffer();
 };
