@@ -66,16 +66,11 @@ private:
   etna::Image mainViewDepth;
   etna::Image perlinTerrainImage;
   etna::Image normalMapTerrainImage;
+
   etna::Buffer instanceMatricesBuffer;
   etna::Buffer constants;
   etna::Buffer uniformParamsBuffer;
   etna::Buffer perlinValuesBuffer;
-  etna::Buffer particleSSBO;
-  etna::Buffer particleUBO;
-
-  etna::Buffer emitterSSBO;
-  etna::Buffer particleCountBuffer;
-  etna::Buffer spawnUBO;
 
   void* persistentMapping = nullptr;
   void* uniformMapping = nullptr;
@@ -86,32 +81,6 @@ private:
 
   std::uint32_t maxInstances = 0;
   std::uint32_t max_particles = 5'000'000;
-
-  struct ParticleUBO {
-    float deltaT;
-    uint32_t particleCount;
-    glm::vec3 gravity;
-    glm::vec3 wind;
-    float drag;
-  };
-
-    struct SpawnUBO {
-    float deltaTime;
-    uint32_t emitterCount;
-  };
-
-  struct EmitterGPU {
-    glm::vec3 position;
-    float timeSinceLastSpawn;
-    glm::vec3 initialVelocity;
-    float spawnFrequency;
-    float particleLifetime;
-    float size;
-    uint32_t maxParticles;
-    uint32_t currentParticles;
-  };
-
-  ParticleUBO particleUbo;
 
   std::vector<InstanceGroup> instanceGroups;
   std::vector<glm::mat4> instanceMatrices;

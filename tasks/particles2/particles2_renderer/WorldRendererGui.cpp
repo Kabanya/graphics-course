@@ -1,6 +1,7 @@
 #include "WorldRendererGui.hpp"
 
 #include "WorldRenderer.hpp"
+#include "ParticleSystem.hpp"
 
 #include <algorithm>
 #include <imgui.h>
@@ -138,16 +139,16 @@ void WorldRendererGui::drawParticlesTab()
 
   if (ImGui::Button("Add Emitter"))
   {
-    Emitter e;
-    e.position         = {0, 0, 0};
-    e.spawnFrequency   = 10.0f;
-    e.particleLifetime = 5.0f;
-    e.initialVelocity  = {0, 10, 0};
-    e.gravity          = {0, -9.8f, 0};
-    e.drag             = 0.1f;
-    e.size             = 5.0f;
-    e.maxParticles     = renderer_.particleSystem->max_particlesPerEmitter;
-    e.createBuffer();
+    auto e = std::make_unique<Emitter>();
+    e->position         = {0, 0, 0};
+    e->spawnFrequency   = 10.0f;
+    e->particleLifetime = 5.0f;
+    e->initialVelocity  = {0, 10, 0};
+    e->gravity          = {0, -9.8f, 0};
+    e->drag             = 0.1f;
+    e->size             = 5.0f;
+    e->maxParticles     = renderer_.particleSystem->max_particlesPerEmitter;
+    e->createBuffer();
     renderer_.particleSystem->addEmitter(std::move(e));
   }
 
@@ -155,16 +156,16 @@ void WorldRendererGui::drawParticlesTab()
   {
     for (int i = 0; i < numEmitters; ++i)
     {
-      Emitter e;
-      e.position = {i * 0.5f, 0, 0};
-      e.spawnFrequency = 150.0f;
-      e.particleLifetime = 50.0f;
-      e.initialVelocity = {i *0.2f, (10 + i) * 0.1f, i * 0.3f};
-      e.gravity = {0, -9.8f, 0};
-      e.drag = 0.1f;
-      e.size = 5.0f;
-      e.maxParticles = renderer_.particleSystem->max_particlesPerEmitter;
-      e.createBuffer();
+      auto e = std::make_unique<Emitter>();
+      e->position = {i * 0.5f, 0, 0};
+      e->spawnFrequency = 150.0f;
+      e->particleLifetime = 50.0f;
+      e->initialVelocity = {i *0.2f, (10 + i) * 0.1f, i * 0.3f};
+      e->gravity = {0, -9.8f, 0};
+      e->drag = 0.1f;
+      e->size = 5.0f;
+      e->maxParticles = renderer_.particleSystem->max_particlesPerEmitter;
+      e->createBuffer();
       renderer_.particleSystem->addEmitter(std::move(e));
     }
   }

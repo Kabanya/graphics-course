@@ -1,31 +1,67 @@
 #pragma once
 
-#include "Emitter.hpp"
-
-#include <cstdint>
+#include <etna/Buffer.hpp>
+#include <etna/ComputePipeline.hpp>
 #include <vector>
-#include <vulkan/vulkan.hpp>
-#include <glm/glm.hpp>
+#include <memory>
+#include "Emitter.hpp"
 
 class ParticleSystem
 {
 public:
-  ParticleSystem()  = default;
-  ~ParticleSystem() = default;
+  ParticleSystem() = default;
 
-  void update(float dt, glm::vec3 wind);
-  void render(vk::CommandBuffer cmd_buf, etna::Buffer& buffer, uint32_t particle_count);
-  void addEmitter(Emitter emitter);
-  void removeEmitter(size_t index);
+  void addEmitter(std::unique_ptr<Emitter> emitter);
+  void removeEmitter(std::size_t index);
+  void render(vk::CommandBuffer cmd_buf, etna::Buffer& ssbo, uint32_t particle_count);
+
+  void update(float delta_time, glm::vec3 wind,
+              const etna::ComputePipeline& spawn_pipeline,
+              const etna::ComputePipeline& calculate_pipeline,
+              const etna::ComputePipeline& integrate_pipeline);
+
+  std::vector<std::unique_ptr<Emitter>> emitters;
+  std::vector<std::unique_ptr<Emitter>> pendingDestruction;
+
+  etna::Buffer particleSSBO;
+  etna::Buffer particleUBO;
+  etna::Buffer particleCountBuffer;
+  etna::Buffer emitterSSBO;
+  etna::Buffer spawnUBO;
+
+  void* particleSSBOMapping = nullptr;
+  void* emitterSSBOMapping = nullptr;
+  void* particleCountMapping = nullptr;
 
   etna::Buffer particleBuffer;
 
-  glm::vec3 wind = {0.0f, 0.0f, 0.0f};
+  std::uint32_t const maxParticles = 5'000'000;
+  std::uint32_t max_particlesPerEmitter = 10'000;
+  std::uint32_t currentParticleCount = 0;
 
-  std::vector<std::unique_ptr<Emitter>> emitters;
+public:
+  struct ParticleUBO {
+    float deltaT;
+    uint32_t particleCount;
+    glm::vec3 gravity;
+    glm::vec3 wind;
+    float drag;
+  };
+  ParticleUBO particleUbo;
 
-  std::uint32_t max_particlesPerEmitter = 2500;
+  struct SpawnUBO {
+    float deltaTime;
+    uint32_t emitterCount;
+  };
 
-  std::vector<std::unique_ptr<Emitter>> pendingDestruction;
-  std::int32_t destructionDelay = 0;
+  struct EmitterGPU {
+    glm::vec3 position;
+    float timeSinceLastSpawn;
+    glm::vec3 initialVelocity;
+    float spawnFrequency;
+    float particleLifetime;
+    float size;
+    uint32_t maxParticles;
+    uint32_t currentParticles;
+  };
 };

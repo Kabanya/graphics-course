@@ -63,49 +63,6 @@ void WorldRenderer::allocateResources(const glm::uvec2 swapchain_resolution)
 
   std::memcpy(perlinValuesMapping, &perlinParams, sizeof(PerlinParams));
 
-  particleSSBO = ctx.createBuffer(etna::Buffer::CreateInfo{
-    .size = max_particles * sizeof(ParticleGPU),
-    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eVertexBuffer,
-    .memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU,
-    .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-    .name = "particle_ssbo",
-  });
-  particleSSBOMapping = particleSSBO.map();
-
-  particleUBO = ctx.createBuffer(etna::Buffer::CreateInfo{
-    .size = sizeof(ParticleUBO),
-    .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
-    .memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU,
-    .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-    .name = "particle_ubo",
-  });
-
-  emitterSSBO = ctx.createBuffer(etna::Buffer::CreateInfo{
-    .size = 1000 * sizeof(EmitterGPU),
-    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
-    .memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU,
-    .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-    .name = "emitter_ssbo",
-  });
-  emitterSSBOMapping = emitterSSBO.map();
-
-  particleCountBuffer = ctx.createBuffer(etna::Buffer::CreateInfo{
-    .size = sizeof(std::uint32_t) * 2,
-    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
-    .memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU,
-    .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-    .name = "particle_count_buffer",
-  });
-  particleCountMapping = particleCountBuffer.map();
-
-  spawnUBO = ctx.createBuffer(etna::Buffer::CreateInfo{
-    .size = sizeof(SpawnUBO),
-    .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
-    .memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU,
-    .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-    .name = "spawn_ubo",
-  });
-
   maxInstances = 1;
   instanceMatricesBuffer = ctx.createBuffer(etna::Buffer::CreateInfo{
     .size = maxInstances * sizeof(glm::mat4x4),
@@ -200,12 +157,47 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
 
   particleSystem = std::make_unique<ParticleSystem>();
 
-  particleSystem->particleBuffer = ctx.createBuffer(etna::Buffer::CreateInfo{
+  particleSystem->particleSSBO = ctx.createBuffer(etna::Buffer::CreateInfo{
     .size = max_particles * sizeof(ParticleGPU),
-    .bufferUsage = vk::BufferUsageFlagBits::eVertexBuffer,
+    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eVertexBuffer,
     .memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU,
     .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-    .name = "particle_vertex_buffer",
+    .name = "particle_ssbo",
+  });
+  particleSystem->particleSSBOMapping = particleSystem->particleSSBO.map();
+
+  particleSystem->particleUBO = ctx.createBuffer(etna::Buffer::CreateInfo{
+    .size = sizeof(ParticleSystem::ParticleUBO),
+    .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+    .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+    .name = "particle_ubo",
+  });
+
+  particleSystem->emitterSSBO = ctx.createBuffer(etna::Buffer::CreateInfo{
+    .size = 500 * sizeof(ParticleSystem::EmitterGPU),
+    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+    .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+    .name = "emitter_ssbo",
+  });
+  particleSystem->emitterSSBOMapping = particleSystem->emitterSSBO.map();
+
+  particleSystem->particleCountBuffer = ctx.createBuffer(etna::Buffer::CreateInfo{
+    .size = sizeof(std::uint32_t) * 2,
+    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
+    .memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+    .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+    .name = "particle_count_buffer",
+  });
+  particleSystem->particleCountMapping = particleSystem->particleCountBuffer.map();
+
+  particleSystem->spawnUBO = ctx.createBuffer(etna::Buffer::CreateInfo{
+    .size = sizeof(ParticleSystem::SpawnUBO),
+    .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+    .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+    .name = "spawn_ubo",
   });
 
   staticMeshPipeline = {};
@@ -366,7 +358,7 @@ void WorldRenderer::update(const FramePacket& packet)
     for (auto& e : particleSystem->emitters)
       particleSystem->pendingDestruction.push_back(std::move(e));
     particleSystem->emitters.clear();
-    particleUbo.particleCount = 0;
+    particleSystem->currentParticleCount = 0;
     clearAllEmitters = false;
   }
   std::ranges::sort(emittersToRemove);
@@ -386,178 +378,9 @@ void WorldRenderer::update(const FramePacket& packet)
   float dt = packet.currentTime - previousTime;
   previousTime = packet.currentTime;
 
-  std::uint32_t particleCount = currentParticleCount;
+  particleSystem->update(dt, wind, particleSpawnPipeline, particleCalculatePipeline, particleIntegratePipeline);
 
-  auto& ctx = etna::get_context();
-  auto cmdManager = ctx.createOneShotCmdMgr();
-  auto cmdBuf = cmdManager->start();
-  ETNA_CHECK_VK_RESULT(cmdBuf.begin(vk::CommandBufferBeginInfo{}));
-
-  if (!particleSystem->emitters.empty())
-  {
-    std::vector<EmitterGPU> gpuEmitters;
-    for (auto& emitter : particleSystem->emitters)
-    {
-      EmitterGPU ge;
-      ge.position = emitter->position;
-      ge.timeSinceLastSpawn = emitter->timeSinceLastSpawn;
-      ge.initialVelocity = emitter->initialVelocity;
-      ge.spawnFrequency = emitter->spawnFrequency;
-      ge.particleLifetime = emitter->particleLifetime;
-      ge.size = emitter->size;
-      ge.maxParticles = emitter->maxParticles;
-      ge.currentParticles = 0;
-      gpuEmitters.push_back(ge);
-    }
-
-    memcpy(emitterSSBOMapping, gpuEmitters.data(), gpuEmitters.size() * sizeof(EmitterGPU));
-
-    uint32_t countData[2] = {particleCount, max_particles};
-    memcpy(particleCountMapping, countData, sizeof(countData));
-
-    SpawnUBO spawnData;
-    spawnData.deltaTime = dt;
-    spawnData.emitterCount = static_cast<uint32_t>(gpuEmitters.size());
-    memcpy(spawnUBO.map(), &spawnData, sizeof(SpawnUBO));
-    spawnUBO.unmap();
-
-    auto spawnInfo = etna::get_shader_program("particle_spawn");
-    auto descSetSpawn = etna::create_descriptor_set(
-      spawnInfo.getDescriptorLayoutId(0),
-      cmdBuf,
-      {
-        etna::Binding{0, particleSSBO.genBinding()},
-        etna::Binding{1, emitterSSBO.genBinding()},
-        etna::Binding{2, particleCountBuffer.genBinding()},
-        etna::Binding{3, spawnUBO.genBinding()},
-      });
-    cmdBuf.bindPipeline(vk::PipelineBindPoint::eCompute, particleSpawnPipeline.getVkPipeline());
-    cmdBuf.bindDescriptorSets(vk::PipelineBindPoint::eCompute, particleSpawnPipeline.getVkPipelineLayout(), 0, {descSetSpawn.getVkSet()}, {});
-    cmdBuf.dispatch((spawnData.emitterCount + 31) / 32, 1, 1);
-
-    vk::BufferMemoryBarrier2 spawnBarrier{
-      .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-      .srcAccessMask = vk::AccessFlagBits2::eShaderWrite,
-      .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-      .dstAccessMask = vk::AccessFlagBits2::eShaderRead | vk::AccessFlagBits2::eShaderWrite,
-      .buffer = particleSSBO.get(),
-      .offset = 0,
-      .size = VK_WHOLE_SIZE
-    };
-    cmdBuf.pipelineBarrier2(vk::DependencyInfo{
-      .bufferMemoryBarrierCount = 1,
-      .pBufferMemoryBarriers = &spawnBarrier
-    });
-  }
-
-  particleUbo.deltaT = dt;
-  particleUbo.particleCount = particleCount;
-  particleUbo.gravity = glm::vec3(0.0f, 0.0f, 0.0f);
-  particleUbo.wind = wind;
-  particleUbo.drag = 0.0f;
-
-  if (particleCount > 0 || !particleSystem->emitters.empty())
-  {
-    memcpy(particleUBO.map(), &particleUbo, sizeof(ParticleUBO));
-    particleUBO.unmap();
-
-    ETNA_PROFILE_GPU(cmdBuf, particleGPUUpdate);
-
-    // Calculate pass
-    auto calculateInfo = etna::get_shader_program("particle_calculate");
-    auto descSetCalculate = etna::create_descriptor_set(
-      calculateInfo.getDescriptorLayoutId(0),
-      cmdBuf,
-      {
-        etna::Binding{0, particleSSBO.genBinding()},
-        etna::Binding{1, particleUBO.genBinding()},
-      });
-    cmdBuf.bindPipeline(vk::PipelineBindPoint::eCompute, particleCalculatePipeline.getVkPipeline());
-    cmdBuf.bindDescriptorSets(vk::PipelineBindPoint::eCompute, particleCalculatePipeline.getVkPipelineLayout(), 0, {descSetCalculate.getVkSet()}, {});
-    cmdBuf.dispatch((std::max(particleCount, 1u) + 31) / 32, 1, 1);
-
-    etna::flush_barriers(cmdBuf);
-
-    // Integrate pass
-    auto integrateInfo = etna::get_shader_program("particle_integrate");
-    auto descSetIntegrate = etna::create_descriptor_set(
-      integrateInfo.getDescriptorLayoutId(0),
-      cmdBuf,
-      {
-        etna::Binding{0, particleSSBO.genBinding()},
-        etna::Binding{1, particleUBO.genBinding()},
-      });
-    cmdBuf.bindPipeline(vk::PipelineBindPoint::eCompute, particleIntegratePipeline.getVkPipeline());
-    cmdBuf.bindDescriptorSets(vk::PipelineBindPoint::eCompute, particleIntegratePipeline.getVkPipelineLayout(), 0, {descSetIntegrate.getVkSet()}, {});
-    cmdBuf.dispatch((std::max(particleCount, 1u) + 31) / 32, 1, 1);
-  }
-
-  ETNA_CHECK_VK_RESULT(cmdBuf.end());
-  cmdManager->submitAndWait(cmdBuf);
-
-  if (!particleSystem->emitters.empty())
-  {
-    memcpy(&particleCount, particleCountMapping, sizeof(uint32_t));
-    if (particleCount > max_particles)
-      particleCount = max_particles;
-
-    EmitterGPU* readBackEmitters = static_cast<EmitterGPU*>(emitterSSBOMapping);
-    for (size_t i = 0; i < particleSystem->emitters.size(); ++i)
-    {
-      particleSystem->emitters[i]->timeSinceLastSpawn = readBackEmitters[i].timeSinceLastSpawn;
-    }
-  }
-
-  currentParticleCount = particleCount;
-
-  particleUbo.deltaT = dt;
-  particleUbo.particleCount = particleCount;
-  particleUbo.gravity = glm::vec3(0.0f, 0.0f, 0.0f);
-  particleUbo.wind = wind;
-  particleUbo.drag = 0.0f;
-
-  if (particleCount > 0)
-  {
-    memcpy(particleUBO.map(), &particleUbo, sizeof(ParticleUBO));
-    particleUBO.unmap();
-
-    // Dispatch compute
-    auto& ctx = etna::get_context();
-    auto cmdManager = ctx.createOneShotCmdMgr();
-    auto cmdBuf = cmdManager->start();
-    ETNA_CHECK_VK_RESULT(cmdBuf.begin(vk::CommandBufferBeginInfo{}));
-
-    ETNA_PROFILE_GPU(cmdBuf, particleGPUUpdate);
-
-    auto calculateInfo = etna::get_shader_program("particle_calculate");
-    auto descSetCalculate = etna::create_descriptor_set(
-      calculateInfo.getDescriptorLayoutId(0),
-      cmdBuf,
-      {
-        etna::Binding{0, particleSSBO.genBinding()},
-        etna::Binding{1, particleUBO.genBinding()},
-      });
-    cmdBuf.bindPipeline(vk::PipelineBindPoint::eCompute, particleCalculatePipeline.getVkPipeline());
-    cmdBuf.bindDescriptorSets(vk::PipelineBindPoint::eCompute, particleCalculatePipeline.getVkPipelineLayout(), 0, {descSetCalculate.getVkSet()}, {});
-    cmdBuf.dispatch((particleCount + 31) / 32, 1, 1);
-
-    auto integrateInfo = etna::get_shader_program("particle_integrate");
-    auto descSetIntegrate = etna::create_descriptor_set(
-      integrateInfo.getDescriptorLayoutId(0),
-      cmdBuf,
-      {
-        etna::Binding{0, particleSSBO.genBinding()},
-        etna::Binding{1, particleUBO.genBinding()},
-      });
-    cmdBuf.bindPipeline(vk::PipelineBindPoint::eCompute, particleIntegratePipeline.getVkPipeline());
-    cmdBuf.bindDescriptorSets(vk::PipelineBindPoint::eCompute, particleIntegratePipeline.getVkPipelineLayout(), 0, {descSetIntegrate.getVkSet()}, {});
-    cmdBuf.dispatch((particleCount + 31) / 32, 1, 1);
-
-    ETNA_CHECK_VK_RESULT(cmdBuf.end());
-    cmdManager->submitAndWait(cmdBuf);
-  }
-
-  totalParticles = particleCount;
+  totalParticles = particleSystem->currentParticleCount;
   while (totalParticles >= nextMilestone && fpsMilestones.find(nextMilestone) == fpsMilestones.end())
   {
     fpsMilestones[nextMilestone] = ImGui::GetIO().Framerate;
@@ -786,7 +609,7 @@ void WorldRenderer::renderWorld(
         vk::PipelineBindPoint::eGraphics, particlePipeline.getVkPipelineLayout(), 0,
         {descSet.getVkSet()}, {});
     }
-    particleSystem->render(cmd_buf, particleSSBO, currentParticleCount);
+    particleSystem->render(cmd_buf, particleSystem->particleSSBO, particleSystem->currentParticleCount);
   }
 
   if (drawDebugTerrainQuad)
