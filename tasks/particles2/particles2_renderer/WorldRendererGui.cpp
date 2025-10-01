@@ -8,7 +8,10 @@
 #include <etna/GlobalContext.hpp>
 #include "shaders/UniformParams.h"
 
-WorldRendererGui::WorldRendererGui(WorldRenderer& renderer) : renderer_(renderer) {}
+WorldRendererGui::WorldRendererGui(WorldRenderer& renderer)
+  : renderer_(renderer)
+{
+}
 
 void WorldRendererGui::drawGui()
 {
@@ -139,16 +142,14 @@ void WorldRendererGui::drawParticlesTab()
 
   if (ImGui::Button("Add Emitter"))
   {
-    auto e = std::make_unique<Emitter>();
-    e->position         = {0, 0, 0};
-    e->spawnFrequency   = 10.0f;
-    e->particleLifetime = 5.0f;
-    e->initialVelocity  = {0, 10, 0};
-    e->gravity          = {0, -9.8f, 0};
-    e->drag             = 0.1f;
-    e->size             = 5.0f;
-    e->maxParticles     = renderer_.particleSystem->max_particlesPerEmitter;
-    e->createBuffer();
+    Emitter e;
+    e.position = {0, 0, 0};
+    e.spawnFrequency = 10.0f;
+    e.particleLifetime = 5.0f;
+    e.initialVelocity = {0, 10, 0};
+    e.gravity = {0, -9.8f, 0};
+    e.drag = 0.1f;
+    e.size = 5.0f;
     renderer_.particleSystem->addEmitter(std::move(e));
   }
 
@@ -156,47 +157,65 @@ void WorldRendererGui::drawParticlesTab()
   {
     for (int i = 0; i < numEmitters; ++i)
     {
-      auto e = std::make_unique<Emitter>();
-      e->position = {i * 0.5f, 0, 0};
-      e->spawnFrequency = 150.0f;
-      e->particleLifetime = 50.0f;
-      e->initialVelocity = {i *0.2f, (10 + i) * 0.1f, i * 0.3f};
-      e->gravity = {0, -9.8f, 0};
-      e->drag = 0.1f;
-      e->size = 5.0f;
-      e->maxParticles = renderer_.particleSystem->max_particlesPerEmitter;
-      e->createBuffer();
+      Emitter e;
+      e.position = {i * 0.5f, 0, 0};
+      e.spawnFrequency = 10000.0f;
+      e.particleLifetime = 50.0f;
+      e.initialVelocity = {i *0.2f, (10 + i) * 0.1f, i * 0.3f};
+      e.gravity = {0, -9.8f, 0};
+      e.drag = 0.1f;
+      e.size = 5.0f;
       renderer_.particleSystem->addEmitter(std::move(e));
     }
   }
 
-  if (ImGui::Button("Remove All Emitters"))
+  if (ImGui::Button("Add High-Volume Emitter"))
   {
-    renderer_.clearAllEmitters = true;
+    Emitter e;
+    e.position = {0, 0, 0};
+    e.spawnFrequency = 25000.0f;
+    e.particleLifetime = 5.0f;
+    e.initialVelocity = {2, 5, 3};
+    e.gravity = {0, -9.8f, 0};
+    e.drag = 0.1f;
+    e.size = 3.0f;
+    renderer_.particleSystem->addEmitter(std::move(e));
   }
 
+  if (ImGui::Button("Clear All Emitters"))
+  {
+    renderer_.particleSystem->clearAllEmitters();
+    renderer_.fpsMilestones.clear();
+    renderer_.nextMilestone = 5000;
+  }
+
+  std::vector<size_t> emittersToRemove;
   int i = 0;
   for (auto& emitter : renderer_.particleSystem->emitters)
   {
     ImGui::PushID(i);
-    ImGui::Text        ("Emitter %d", i);
-    ImGui::SliderFloat3("Position",          &emitter->position.x, -10, 10);
-    ImGui::SliderFloat ("Spawn Frequency",   &emitter->spawnFrequency, 0.1f, 500.0f);
-    ImGui::SliderFloat ("Particle Lifetime", &emitter->particleLifetime, 0.1f, 25.0f);
-    ImGui::SliderFloat3("Initial Velocity",  &emitter->initialVelocity.x, -15, 15);
-    ImGui::SliderFloat3("Gravity",           &emitter->gravity.x, -2, 2);
-    ImGui::SliderFloat ("Drag",              &emitter->drag, 0.0f, 1.0f);
-    ImGui::SliderFloat ("Size",              &emitter->size, 1.0f, 50.0f);
+    ImGui::Text("Emitter %d", i);
+    ImGui::SliderFloat3("Position", &emitter.position.x, -10, 10);
+    ImGui::SliderFloat("Spawn Frequency", &emitter.spawnFrequency, 0.1f, 500.0f);
+    ImGui::SliderFloat("Particle Lifetime", &emitter.particleLifetime, 0.1f, 25.0f);
+    ImGui::SliderFloat3("Initial Velocity", &emitter.initialVelocity.x, -15, 15);
+    ImGui::SliderFloat3("Gravity", &emitter.gravity.x, -2, 2);
+    ImGui::SliderFloat("Drag", &emitter.drag, 0.0f, 1.0f);
+    ImGui::SliderFloat("Size", &emitter.size, 1.0f, 50.0f);
     if (ImGui::Button("Clear Particles"))
-      emitter->clearParticles();
+      emitter.clearParticles();
     ImGui::SameLine();
     if (ImGui::Button("Remove Emitter"))
-      renderer_.emittersToRemove.push_back(i);
+      emittersToRemove.push_back(i);
     ImGui::SameLine();
-    ImGui::Text("Particles: %zu", emitter->particles.size());
+    ImGui::Text("Particles: %zu", emitter.particles.size());
     ImGui::PopID();
     i++;
   }
+
+  std::sort(emittersToRemove.rbegin(), emittersToRemove.rend());
+  for (auto idx : emittersToRemove)
+    renderer_.particleSystem->removeEmitter(idx);
 }
 
 void WorldRendererGui::drawInfoTab() const

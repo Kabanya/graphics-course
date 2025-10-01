@@ -95,9 +95,6 @@ private:
   etna::ComputePipeline  normalPipeline{};
   etna::GraphicsPipeline terrainPipeline{};
   etna::GraphicsPipeline particlePipeline{};
-  etna::ComputePipeline  particleCalculatePipeline{};
-  etna::ComputePipeline  particleIntegratePipeline{};
-  etna::ComputePipeline  particleSpawnPipeline{};
 
   std::unique_ptr<QuadRenderer> quadRenderer;
 

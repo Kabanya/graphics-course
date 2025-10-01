@@ -1,43 +1,51 @@
 #pragma once
 
+#include <cstdint>
 #include <etna/Buffer.hpp>
 #include <etna/ComputePipeline.hpp>
 #include <vector>
-#include <memory>
 #include "Emitter.hpp"
 
 class ParticleSystem
 {
-public:
+  public:
   ParticleSystem() = default;
 
-  void addEmitter(std::unique_ptr<Emitter> emitter);
+  void allocateResources();
+  void setupPipelines();
+  // void render(vk::CommandBuffer cmd_buf, etna::Buffer& ssbo, uint32_t particle_count);
+  void render(vk::CommandBuffer cmd_buf, glm::vec3 cam_pos);
+
+  void update(float dt, const glm::vec3 wind_value);
+
+  void addEmitter(Emitter&& emitter);
+  void reallocateEmitterBuffer(std::size_t index);
+  void updateMaxParticles(std::uint32_t new_max);
   void removeEmitter(std::size_t index);
-  void render(vk::CommandBuffer cmd_buf, etna::Buffer& ssbo, uint32_t particle_count);
+  void clearAllEmitters();
 
-  void update(float delta_time, glm::vec3 wind,
-              const etna::ComputePipeline& spawn_pipeline,
-              const etna::ComputePipeline& calculate_pipeline,
-              const etna::ComputePipeline& integrate_pipeline);
 
-  std::vector<std::unique_ptr<Emitter>> emitters;
-  std::vector<std::unique_ptr<Emitter>> pendingDestruction;
+public:
+    std::vector<Emitter> emitters;
+    const std::vector<Emitter>& getEmitters() const {return emitters;}
 
-  etna::Buffer particleSSBO;
-  etna::Buffer particleUBO;
-  etna::Buffer particleCountBuffer;
-  etna::Buffer emitterSSBO;
-  etna::Buffer spawnUBO;
+  etna::ComputePipeline particleCalculatePipeline{};
+  etna::ComputePipeline particleIntegratePipeline{};
+  etna::ComputePipeline particleSpawnPipeline{};
+
+  // etna::Buffer particleSSBO;
+  // etna::Buffer particleUBO;
+  // etna::Buffer particleCountBuffer;
+  // etna::Buffer emitterSSBO;
+  // etna::Buffer spawnUBO;
 
   void* particleSSBOMapping = nullptr;
   void* emitterSSBOMapping = nullptr;
   void* particleCountMapping = nullptr;
 
-  etna::Buffer particleBuffer;
-
   std::uint32_t const maxParticles = 5'000'000;
-  std::uint32_t max_particlesPerEmitter = 10'000;
-  std::uint32_t currentParticleCount = 0;
+  std::uint32_t max_particlesPerEmitter = Emitter().maxParticles;
+  // std::uint32_t currentParticleCount = 0;
 
 public:
   struct ParticleUBO {
