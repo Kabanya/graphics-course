@@ -159,49 +159,6 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
 
   particleSystem->setupPipelines();
 
-  // particleSystem->particleSSBO = ctx.createBuffer(etna::Buffer::CreateInfo{
-  //   .size = max_particles * sizeof(ParticleGPU),
-  //   .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eVertexBuffer,
-  //   .memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU,
-  //   .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-  //   .name = "particle_ssbo",
-  // });
-  // particleSystem->particleSSBOMapping = particleSystem->particleSSBO.map();
-
-  // particleSystem->particleUBO = ctx.createBuffer(etna::Buffer::CreateInfo{
-  //   .size = sizeof(ParticleSystem::ParticleUBO),
-  //   .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
-  //   .memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU,
-  //   .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-  //   .name = "particle_ubo",
-  // });
-
-  // particleSystem->emitterSSBO = ctx.createBuffer(etna::Buffer::CreateInfo{
-  //   .size = 500 * sizeof(ParticleSystem::EmitterGPU),
-  //   .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
-  //   .memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU,
-  //   .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-  //   .name = "emitter_ssbo",
-  // });
-  // particleSystem->emitterSSBOMapping = particleSystem->emitterSSBO.map();
-
-  // particleSystem->particleCountBuffer = ctx.createBuffer(etna::Buffer::CreateInfo{
-  //   .size = sizeof(std::uint32_t) * 2,
-  //   .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
-  //   .memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU,
-  //   .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-  //   .name = "particle_count_buffer",
-  // });
-  // particleSystem->particleCountMapping = particleSystem->particleCountBuffer.map();
-
-  // particleSystem->spawnUBO = ctx.createBuffer(etna::Buffer::CreateInfo{
-  //   .size = sizeof(ParticleSystem::SpawnUBO),
-  //   .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
-  //   .memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU,
-  //   .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-  //   .name = "spawn_ubo",
-  // });
-
   staticMeshPipeline = {};
   staticMeshPipeline = pipelineManager.createGraphicsPipeline(
     "static_mesh_material",
@@ -351,15 +308,6 @@ void WorldRenderer::update(const FramePacket& packet)
 {
   ZoneScoped;
 
-  // deleting emitters
-  // if (clearAllEmitters)
-  // {
-  //   for (auto& e : particleSystem->emitters)
-  //     particleSystem->pendingDestruction.push_back(std::move(e));
-  //   particleSystem->emitters.clear();
-  //   particleSystem->currentParticleCount = 0;
-  //   clearAllEmitters = false;
-  // }
   std::ranges::sort(emittersToRemove);
   for (auto idx : emittersToRemove)
     particleSystem->removeEmitter(idx);
@@ -391,12 +339,6 @@ void WorldRenderer::update(const FramePacket& packet)
     fpsMilestones[nextMilestone] = ImGui::GetIO().Framerate;
     nextMilestone += 5000;
   }
-
-  // while (totalParticles >= nextMilestone && fpsMilestones.find(nextMilestone) == fpsMilestones.end())
-  // {
-  //   fpsMilestones[nextMilestone] = ImGui::GetIO().Framerate;
-  //   nextMilestone += 5000;
-  // }
 
   std::memcpy(perlinValuesMapping, &perlinParams, sizeof(PerlinParams));
 

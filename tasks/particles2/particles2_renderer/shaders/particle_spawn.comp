@@ -15,7 +15,7 @@ struct Emitter
   float spawnFrequency;
   float particleLifetime;
   float size;
-  uint maxParticles;
+  uint maxParticlesPerEmitter;
   uint currentParticles;
 };
 
@@ -32,8 +32,16 @@ layout(std140, binding = 1) buffer Emitters
 layout(std140, binding = 2) buffer ParticleCount
 {
   uint particleCount;
-  uint maxParticles;
+  uint maxParticlesPerEmitter;
 };
+
+layout(std140, binding = 4) buffer IndirectDraw
+{
+  uint vertexCount;
+  uint instanceCount;
+  uint firstVertex;
+  uint firstInstance;
+} indirectDraw;
 
 layout(binding = 3) uniform SpawnUBO
 {
@@ -65,7 +73,7 @@ void main()
   {
     uint startIdx = atomicAdd(particleCount, particlesToSpawn);
 
-    for (uint i = 0; i < particlesToSpawn && (startIdx + i) < maxParticles; i++)
+    for (uint i = 0; i < particlesToSpawn && (startIdx + i) < maxParticlesPerEmitter; i++)
     {
       uint idx = startIdx + i;
       particles[idx].pos = vec4(emitter.position, emitter.size);
@@ -74,4 +82,9 @@ void main()
   }
 
   emitters[emitterIdx].timeSinceLastSpawn = emitter.timeSinceLastSpawn;
+
+  indirectDraw.vertexCount = particleCount;
+  indirectDraw.instanceCount = 1;
+  indirectDraw.firstVertex = 0;
+  indirectDraw.firstInstance = 0;
 }

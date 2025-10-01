@@ -6,31 +6,6 @@
 #include "etna/Profiling.hpp"
 // #include "shaders/UniformParams.h"
 
-// void Emitter::update(float dt, const std::uint32_t max_particles, glm::vec3 wind)
-// {
-//   timeSinceLastSpawn += dt;
-//   float spawnInterval = 1.0f / spawnFrequency;
-//   while (timeSinceLastSpawn >= spawnInterval && particles.size() < max_particles)
-//   {
-//     spawnParticle();
-//     timeSinceLastSpawn -= spawnInterval;
-//   }
-
-//   std::erase_if(
-//     particles,
-//     [dt, this, wind](Particle& p)
-//     {
-//       auto pos = p.position;
-//       auto vel = p.velocity;
-//       pos += vel * dt;
-//       vel += (gravity + wind) * dt - drag * vel * dt;
-//       p.position = pos;
-//       p.velocity = vel;
-//       p.remainingLifetime -= dt;
-//       return p.remainingLifetime <= 0.0f;
-//     });
-// }
-
 void Emitter::spawnParticle()
 {
   Particle p;
@@ -51,7 +26,7 @@ void Emitter::allocateGPUResources()
   auto& ctx = etna::get_context();
 
   particleSSBO = ctx.createBuffer(etna::Buffer::CreateInfo{
-    .size = maxParticles * sizeof(Particle),
+    .size = maxParticlesPerEmitter * sizeof(Particle),
     .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eVertexBuffer,
     .memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU,
     .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
@@ -85,6 +60,17 @@ void Emitter::allocateGPUResources()
   });
   particleCountMapping = particleCountBuffer.map();
 
+  indirectDrawBuffer = ctx.createBuffer(etna::Buffer::CreateInfo{
+    .size = sizeof(VkDrawIndirectCommand),
+    .bufferUsage = vk::BufferUsageFlagBits::eIndirectBuffer | vk::BufferUsageFlagBits::eStorageBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+    .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+    .name = "indirect_draw_buffer",
+  });
+  VkDrawIndirectCommand initialDraw = {0, 1, 0, 0};
+  memcpy(indirectDrawBuffer.map(), &initialDraw, sizeof(VkDrawIndirectCommand));
+  indirectDrawBuffer.unmap();
+
   spawnUBO = ctx.createBuffer(etna::Buffer::CreateInfo{
     .size = sizeof(SpawnUBO),
     .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
@@ -117,7 +103,7 @@ void Emitter::update(float dt, glm::vec3 wind,
       float spawnFrequency;
       float particleLifetime;
       float size;
-      uint32_t maxParticles;
+      uint32_t maxParticlesPerEmitter;
       uint32_t currentParticles;
     };
 
@@ -128,13 +114,13 @@ void Emitter::update(float dt, glm::vec3 wind,
     gpuEmitter.spawnFrequency = spawnFrequency;
     gpuEmitter.particleLifetime = particleLifetime;
     gpuEmitter.size = size;
-    gpuEmitter.maxParticles = maxParticles;
+    gpuEmitter.maxParticlesPerEmitter = maxParticlesPerEmitter;
     gpuEmitter.currentParticles = 0;
 
-    // Write emitter data (assuming single emitter buffer)
+    // Write emitter datta
     memcpy(emitterSSBOMapping, &gpuEmitter, sizeof(EmitterGPU));
 
-    uint32_t countData[2] = {currentParticleCount, maxParticles};
+    uint32_t countData[2] = {currentParticleCount, maxParticlesPerEmitter};
     memcpy(particleCountMapping, countData, sizeof(countData));
 
     spawnData.deltaTime = dt;
@@ -151,25 +137,12 @@ void Emitter::update(float dt, glm::vec3 wind,
         etna::Binding{1, emitterSSBO.genBinding()},
         etna::Binding{2, particleCountBuffer.genBinding()},
         etna::Binding{3, spawnUBO.genBinding()},
+        etna::Binding{4, indirectDrawBuffer.genBinding()},
       });
 
     cmdBuf.bindPipeline(vk::PipelineBindPoint::eCompute, spawn_pipeline.getVkPipeline());
     cmdBuf.bindDescriptorSets(vk::PipelineBindPoint::eCompute, spawn_pipeline.getVkPipelineLayout(), 0, {descSetSpawn.getVkSet()}, {});
     cmdBuf.dispatch(1, 1, 1); // Single emitter
-
-    // vk::BufferMemoryBarrier2 spawnBarrier{
-    //   .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-    //   .srcAccessMask = vk::AccessFlagBits2::eShaderWrite,
-    //   .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-    //   .dstAccessMask = vk::AccessFlagBits2::eShaderRead | vk::AccessFlagBits2::eShaderWrite,
-    //   .buffer = particleSSBO.get(),
-    //   .offset = 0,
-    //   .size = VK_WHOLE_SIZE
-    // };
-    // cmdBuf.pipelineBarrier2(vk::DependencyInfo{
-    //   .bufferMemoryBarrierCount = 1,
-    //   .pBufferMemoryBarriers = &spawnBarrier
-    // });
     etna::flush_barriers(cmdBuf);
   }
 
@@ -199,20 +172,6 @@ void Emitter::update(float dt, glm::vec3 wind,
     cmdBuf.bindPipeline(vk::PipelineBindPoint::eCompute, calculate_pipeline.getVkPipeline());
     cmdBuf.bindDescriptorSets(vk::PipelineBindPoint::eCompute, calculate_pipeline.getVkPipelineLayout(), 0, {descSetCalculate.getVkSet()}, {});
     cmdBuf.dispatch((currentParticleCount + 31) / 32, 1, 1);
-
-    // vk::BufferMemoryBarrier2 calcBarrier{
-    //   .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-    //   .srcAccessMask = vk::AccessFlagBits2::eShaderWrite,
-    //   .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-    //   .dstAccessMask = vk::AccessFlagBits2::eShaderRead | vk::AccessFlagBits2::eShaderWrite,
-    //   .buffer = particleSSBO.get(),
-    //   .offset = 0,
-    //   .size = VK_WHOLE_SIZE
-    // };
-    // cmdBuf.pipelineBarrier2(vk::DependencyInfo{
-    //   .bufferMemoryBarrierCount = 1,
-    //   .pBufferMemoryBarriers = &calcBarrier
-    // });
     etna::flush_barriers(cmdBuf);
 
     // Integrate pass
@@ -234,16 +193,13 @@ void Emitter::update(float dt, glm::vec3 wind,
 
   // Readback particle count and emitter state
   memcpy(&currentParticleCount, particleCountMapping, sizeof(uint32_t));
-  if (currentParticleCount > maxParticles)
-    currentParticleCount = maxParticles;
+  if (currentParticleCount > maxParticlesPerEmitter)
+    currentParticleCount = maxParticlesPerEmitter;
 
-  // Update timeSinceLastSpawn from GPU
   if (spawnFrequency > 0.0f)
   {
     EmitterGPU* readBackEmitter = static_cast<EmitterGPU*>(emitterSSBOMapping);
     timeSinceLastSpawn = readBackEmitter->timeSinceLastSpawn;
   }
-
-  // Clear CPU particles vector as we're using GPU buffers now
   particles.clear();
 }

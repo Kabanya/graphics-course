@@ -134,7 +134,7 @@ void WorldRendererGui::drawParticlesTab()
     "Particle Color", particleColor, ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoInputs);
   renderer_.uniformParams.particleColor = {particleColor[0], particleColor[1], particleColor[2]};
   ImGui::SliderFloat3("Wind", &renderer_.wind.x, -5.0f, 5.0f);
-  ImGui::SliderInt("Max Particles per Emitter", reinterpret_cast<int*>(&renderer_.particleSystem->max_particlesPerEmitter), 0, 10000);
+  // ImGui::SliderInt("Max Particles per Emitter", reinterpret_cast<int*>(&renderer_.particleSystem->max_particlesPerEmitter), 0, 10000);
 
   static int numEmitters = 10;
   ImGui::InputInt("Number of Emitters to Add", &numEmitters, 5, 25);
@@ -167,19 +167,6 @@ void WorldRendererGui::drawParticlesTab()
       e.size = 5.0f;
       renderer_.particleSystem->addEmitter(std::move(e));
     }
-  }
-
-  if (ImGui::Button("Add High-Volume Emitter"))
-  {
-    Emitter e;
-    e.position = {0, 0, 0};
-    e.spawnFrequency = 25000.0f;
-    e.particleLifetime = 5.0f;
-    e.initialVelocity = {2, 5, 3};
-    e.gravity = {0, -9.8f, 0};
-    e.drag = 0.1f;
-    e.size = 3.0f;
-    renderer_.particleSystem->addEmitter(std::move(e));
   }
 
   if (ImGui::Button("Clear All Emitters"))

@@ -26,13 +26,14 @@ public:
   etna::Buffer particleCountBuffer;
   etna::Buffer spawnUBO;
   etna::Buffer emitterSSBO;
+  etna::Buffer indirectDrawBuffer;
 
   void* particleSSBOMapping = nullptr;
   void* particleCountMapping = nullptr;
   void* emitterSSBOMapping = nullptr;
 
   std::uint32_t currentParticleCount = 0;
-  std::uint32_t maxParticles = 500'000;
+  std::uint32_t maxParticlesPerEmitter = 500'000;
 
   void update(float dt, glm::vec3 wind,
               const etna::ComputePipeline& spawn_pipeline,
@@ -64,7 +65,7 @@ public:
     float spawnFrequency;
     float particleLifetime;
     float size;
-    uint32_t maxParticles;
+    uint32_t maxParticlesPerEmitter;
     uint32_t currentParticles;
   };
 };
