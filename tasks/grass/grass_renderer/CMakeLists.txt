@@ -5,6 +5,7 @@ add_executable(grass_renderer
   Renderer.cpp
   WorldRenderer.cpp
   WorldRendererGui.cpp
+  TerrainRenderer.cpp
 )
 
 target_link_libraries(grass_renderer

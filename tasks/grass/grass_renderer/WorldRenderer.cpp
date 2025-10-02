@@ -11,11 +11,9 @@
 
 WorldRenderer::WorldRenderer()
   : sceneMgr{std::make_unique<SceneManager>()},
-    gui{std::make_unique<WorldRendererGui>(*this)}
-{
-  groupCountX = (terrainTextureSizeWidth + computeWorkgroupSize - 1) / computeWorkgroupSize;
-  groupCountY = (terrainTextureSizeHeight + computeWorkgroupSize - 1) / computeWorkgroupSize;
-}
+    gui{std::make_unique<WorldRendererGui>(*this)},
+    terrainRenderer{std::make_unique<TerrainRenderer>()}
+{}
 
 void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
 {
@@ -23,7 +21,7 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
 
   auto& ctx = etna::get_context();
 
-  defaultSampler = etna::Sampler(etna::Sampler::CreateInfo{.name = "default_sampler"});
+  default_sampler = etna::Sampler(etna::Sampler::CreateInfo{.name = "default_sampler"});
 
   mainViewDepth = ctx.createImage(etna::Image::CreateInfo{
     .extent = vk::Extent3D{resolution.x, resolution.y, 1},
@@ -41,25 +39,14 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
   });
   // constants.map();
 
-  uniformParamsBuffer = ctx.createBuffer(etna::Buffer::CreateInfo{
+  uniform_params_buffer = ctx.createBuffer(etna::Buffer::CreateInfo{
     .size = sizeof(UniformParams),
     .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
     .memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU,
     .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
     .name = "uniform_params",
   });
-  uniformMapping = uniformParamsBuffer.map();
-
-  perlinValuesBuffer = ctx.createBuffer(etna::Buffer::CreateInfo{
-    .size = sizeof(PerlinParams),
-    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
-    .memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU,
-    .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-    .name = "perlin_values",
-  });
-  perlinValuesMapping = perlinValuesBuffer.map();
-
-  std::memcpy(perlinValuesMapping, &perlinParams, sizeof(PerlinParams));
+  uniformMapping = uniform_params_buffer.map();
 
   maxInstances = 1;
   instanceMatricesBuffer = ctx.createBuffer(etna::Buffer::CreateInfo
@@ -72,25 +59,7 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
   });
   persistentMapping = instanceMatricesBuffer.map();
 
-  perlinTerrainImage = ctx.createImage(etna::Image::CreateInfo{
-    .extent = vk::Extent3D{terrainTextureSizeWidth, terrainTextureSizeHeight, 1},
-    .name = "perlin_noise",
-    .format = vk::Format::eR32Sfloat,
-    .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
-
-  normalMapTerrainImage = ctx.createImage(etna::Image::CreateInfo{
-    .extent = vk::Extent3D{terrainTextureSizeWidth, terrainTextureSizeHeight, 1},
-    .name = "normal_map_terrain",
-    .format = vk::Format::eR32G32B32A32Sfloat,
-    .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
-
-  auto cmdManager = ctx.createOneShotCmdMgr();
-  auto cmdBuf = cmdManager->start();
-  ETNA_CHECK_VK_RESULT(cmdBuf.begin(vk::CommandBufferBeginInfo{}));
-  createTerrainMap(cmdBuf);
-  ETNA_CHECK_VK_RESULT(cmdBuf.end());
-
-  cmdManager->submitAndWait(cmdBuf);
+  terrainRenderer->allocateResources(constants, uniform_params_buffer, default_sampler);
 }
 
 void WorldRenderer::loadScene(std::filesystem::path path)
@@ -124,14 +93,7 @@ void WorldRenderer::loadShaders()
     "static_mesh_material",
     {GRASS_RENDERER_SHADERS_ROOT "static_mesh.frag.spv",
      GRASS_RENDERER_SHADERS_ROOT "static_mesh.vert.spv"});
-  etna::create_program("perlin_terrain", {GRASS_RENDERER_SHADERS_ROOT "terrain_perlin.comp.spv"});
-  etna::create_program("normal_map_generation", {GRASS_RENDERER_SHADERS_ROOT "terrain_normal.comp.spv"});
-  etna::create_program(
-    "terrain_render",
-    {GRASS_RENDERER_SHADERS_ROOT "quad.vert.spv",
-     GRASS_RENDERER_SHADERS_ROOT "terrain.tesc.spv",
-     GRASS_RENDERER_SHADERS_ROOT "terrain.tese.spv",
-     GRASS_RENDERER_SHADERS_ROOT "terrain.frag.spv"});
+  terrainRenderer->loadShaders();
 }
 
 void WorldRenderer::setupPipelines(vk::Format swapchain_format)
@@ -167,25 +129,7 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
           .depthAttachmentFormat = vk::Format::eD32Sfloat,
         },
     });
-  perlinPipeline = pipelineManager.createComputePipeline("perlin_terrain", {});
-  normalPipeline = pipelineManager.createComputePipeline("normal_map_generation", {});
-  terrainPipeline = pipelineManager.createGraphicsPipeline(
-    "terrain_render",
-    etna::GraphicsPipeline::CreateInfo{
-      .inputAssemblyConfig = {.topology = vk::PrimitiveTopology::ePatchList},
-      .rasterizationConfig =
-        vk::PipelineRasterizationStateCreateInfo{
-          .polygonMode = vk::PolygonMode::eFill,
-          .cullMode = vk::CullModeFlagBits::eBack,
-          .frontFace = vk::FrontFace::eCounterClockwise,
-          .lineWidth = 1.f,
-        },
-      .fragmentShaderOutput =
-        {
-          .colorAttachmentFormats = {swapchain_format},
-          .depthAttachmentFormat = vk::Format::eD32Sfloat,
-        },
-    });
+  terrainRenderer->setupPipelines(swapchain_format);
 }
 
 bool WorldRenderer::isVisibleBoundingBox(const glm::vec3& min, const glm::vec3& max, const glm::mat4& mvp) const
@@ -257,8 +201,6 @@ void WorldRenderer::update(const FramePacket& packet)
 
   std::memcpy(uniformMapping, &uniformParams, sizeof(UniformParams));
 
-  std::memcpy(perlinValuesMapping, &perlinParams, sizeof(PerlinParams));
-
   WorldRendererConstants worldConstants{
     .viewProj = worldViewProj,
     .camView = glm::vec4(camView, 1.f),
@@ -269,6 +211,8 @@ void WorldRenderer::update(const FramePacket& packet)
   std::memcpy(constantsMapping, &worldConstants, sizeof(WorldRendererConstants));
   constants.unmap();
 
+  terrainRenderer->update(perlinParams);
+
   auto instanceMeshes = sceneMgr->getInstanceMeshes();
   auto instanceMatricesData = sceneMgr->getInstanceMatrices();
 
@@ -276,16 +220,16 @@ void WorldRenderer::update(const FramePacket& packet)
     return;
 
   const size_t instanceCount = instanceMeshes.size();
-  static std::vector<std::pair<uint32_t, uint32_t>> meshInstancePairs;
+  static std::vector<std::pair<std::uint32_t, std::uint32_t>> meshInstancePairs;
   meshInstancePairs.clear();
   meshInstancePairs.reserve(instanceCount);
 
   for (size_t i = 0; i < instanceCount; ++i)
-    meshInstancePairs.emplace_back(instanceMeshes[i], static_cast<uint32_t>(i));
+    meshInstancePairs.emplace_back(instanceMeshes[i], static_cast<std::uint32_t>(i));
 
   std::sort(meshInstancePairs.begin(), meshInstancePairs.end());
 
-  static std::vector<std::pair<uint32_t, uint32_t>> visiblePairs;
+  static std::vector<std::pair<std::uint32_t, std::uint32_t>> visiblePairs;
   visiblePairs.clear();
   visiblePairs.reserve(instanceCount);
 
@@ -462,149 +406,11 @@ void WorldRenderer::renderWorld(
       {{.image = target_image, .view = target_image_view, .loadOp = vk::AttachmentLoadOp::eLoad}},
       {.image = mainViewDepth.get(), .view = mainViewDepth.getView({}), .loadOp = vk::AttachmentLoadOp::eLoad});
 
-    cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, terrainPipeline.getVkPipeline());
-    renderTerrain(cmd_buf);
+    terrainRenderer->render(cmd_buf);
   }
 
   if (drawDebugTerrainQuad)
-    quadRenderer->render(cmd_buf, target_image, target_image_view, perlinTerrainImage, defaultSampler);
-}
-
-void WorldRenderer::renderTerrain(vk::CommandBuffer cmd_buf)
-{
-  auto info = etna::get_shader_program("terrain_render");
-  auto perlinBind = perlinTerrainImage.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal);
-  auto normalBind = normalMapTerrainImage.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal);
-
-  auto descSet = etna::create_descriptor_set(
-    info.getDescriptorLayoutId(0),
-    cmd_buf,
-    {
-      etna::Binding{0, perlinBind},
-      etna::Binding{1, normalBind},
-      etna::Binding{2, constants.genBinding()},
-      etna::Binding{3, uniformParamsBuffer.genBinding()},
-    });
-  auto vkSet = descSet.getVkSet();
-  auto layout = terrainPipeline.getVkPipelineLayout();
-
-  cmd_buf.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout, 0, 1, &vkSet, 0, nullptr);
-
-  cmd_buf.draw(4, (terrainTextureSizeWidth * terrainTextureSizeHeight) / (computeWorkgroupSize * computeWorkgroupSize * 16), 0, 0);
-}
-
-void WorldRenderer::regenerateTerrain()
-{
-  auto& ctx = etna::get_context();
-  auto cmdManager = ctx.createOneShotCmdMgr();
-  auto cmdBuf = cmdManager->start();
-  ETNA_CHECK_VK_RESULT(cmdBuf.begin(vk::CommandBufferBeginInfo{}));
-  createTerrainMap(cmdBuf);
-  ETNA_CHECK_VK_RESULT(cmdBuf.end());
-  cmdManager->submitAndWait(cmdBuf);
-}
-
-void WorldRenderer::createTerrainMap(vk::CommandBuffer cmd_buf)
-{
-  etna::set_state(
-    cmd_buf,
-    perlinTerrainImage.get(),
-    vk::PipelineStageFlagBits2::eComputeShader,
-    vk::AccessFlagBits2::eShaderWrite,
-    vk::ImageLayout::eGeneral,
-    vk::ImageAspectFlagBits::eColor);
-
-  etna::flush_barriers(cmd_buf);
-
-  {
-    auto perlinInfo = etna::get_shader_program("perlin_terrain");
-
-    auto binding = perlinTerrainImage.genBinding(defaultSampler.get(), vk::ImageLayout::eGeneral, {});
-
-    auto set = etna::create_descriptor_set(
-      perlinInfo.getDescriptorLayoutId(0),
-      cmd_buf,
-      {
-        etna::Binding{0, binding},
-        etna::Binding{1, perlinValuesBuffer.genBinding()},
-      });
-
-    vk::DescriptorSet vkSet = set.getVkSet();
-
-    cmd_buf.bindPipeline(vk::PipelineBindPoint::eCompute, perlinPipeline.getVkPipeline());
-    cmd_buf.bindDescriptorSets(
-      vk::PipelineBindPoint::eCompute,
-      perlinPipeline.getVkPipelineLayout(),
-      0,
-      1,
-      &vkSet,
-      0,
-      nullptr);
-
-    cmd_buf.dispatch(terrainTextureSizeWidth / computeWorkgroupSize, terrainTextureSizeHeight / computeWorkgroupSize, 1);
-  }
-
-  etna::set_state(
-    cmd_buf,
-    perlinTerrainImage.get(),
-    vk::PipelineStageFlagBits2::eComputeShader,
-    vk::AccessFlagBits2::eShaderRead,
-    vk::ImageLayout::eGeneral,
-    vk::ImageAspectFlagBits::eColor);
-
-  etna::set_state(
-    cmd_buf,
-    normalMapTerrainImage.get(),
-    vk::PipelineStageFlagBits2::eComputeShader,
-    vk::AccessFlagBits2::eShaderWrite,
-    vk::ImageLayout::eGeneral,
-    vk::ImageAspectFlagBits::eColor);
-  etna::flush_barriers(cmd_buf);
-
-  {
-    auto normalInfo = etna::get_shader_program("normal_map_generation");
-    auto binding0 = perlinTerrainImage.genBinding(defaultSampler.get(), vk::ImageLayout::eGeneral, {});
-    auto binding1 = normalMapTerrainImage.genBinding(defaultSampler.get(), vk::ImageLayout::eGeneral, {});
-
-    auto set = etna::create_descriptor_set(
-      normalInfo.getDescriptorLayoutId(0),
-      cmd_buf,
-      {
-        etna::Binding{0, binding0},
-        etna::Binding{1, binding1},
-      });
-
-    vk::DescriptorSet vkSet = set.getVkSet();
-
-    cmd_buf.bindPipeline(vk::PipelineBindPoint::eCompute, normalPipeline.getVkPipeline());
-    cmd_buf.bindDescriptorSets(
-      vk::PipelineBindPoint::eCompute,
-      normalPipeline.getVkPipelineLayout(),
-      0,
-      1,
-      &vkSet,
-      0,
-      nullptr);
-
-    cmd_buf.dispatch(groupCountX, groupCountY, 1);
-  }
-
-  etna::set_state(
-    cmd_buf,
-    perlinTerrainImage.get(),
-    vk::PipelineStageFlagBits2::eTessellationEvaluationShader,
-    vk::AccessFlagBits2::eShaderSampledRead,
-    vk::ImageLayout::eReadOnlyOptimal,
-    vk::ImageAspectFlagBits::eColor);
-
-  etna::set_state(
-    cmd_buf,
-    normalMapTerrainImage.get(),
-    vk::PipelineStageFlagBits2::eTessellationEvaluationShader,
-    vk::AccessFlagBits2::eShaderSampledRead,
-    vk::ImageLayout::eReadOnlyOptimal,
-    vk::ImageAspectFlagBits::eColor);
-  etna::flush_barriers(cmd_buf);
+    quadRenderer->render(cmd_buf, target_image, target_image_view, terrainRenderer->getPerlinTerrainImage(), default_sampler);
 }
 
 float WorldRenderer::getCameraSpeed() const
@@ -620,6 +426,22 @@ float WorldRenderer::getCameraSpeed() const
     default:
       return 50.0f;
   }
+}
+
+const PerlinParams& WorldRenderer::getPerlinParams() const
+{
+  return perlinParams;
+}
+
+void WorldRenderer::setPerlinParams(const PerlinParams& params)
+{
+  perlinParams = params;
+  terrainRenderer->update(perlinParams);
+}
+
+void WorldRenderer::regenerateTerrain()
+{
+  terrainRenderer->regenerateTerrain();
 }
 
 void WorldRenderer::drawGui()

@@ -9,6 +9,8 @@
 #include <glm/glm.hpp>
 #include <memory>
 
+#include "TerrainRenderer.hpp"
+
 #include "WorldRendererGui.hpp"
 #include "shaders/UniformParams.h"
 #include "scene/SceneManager.hpp"
@@ -45,55 +47,48 @@ public:
 
   void debugInput(const Keyboard& kb);
   void update(const FramePacket& packet);
-  void drawGui();
   void renderWorld(
     vk::CommandBuffer cmd_buf, vk::Image target_image, vk::ImageView target_image_view);
+  const PerlinParams& getPerlinParams() const;
+  void setPerlinParams(const PerlinParams& params);
+  void regenerateTerrain();
 
   float getCameraSpeed() const;
+  void drawGui();
 
 private:
   void renderScene(
     vk::CommandBuffer cmd_buf, vk::PipelineLayout pipeline_layout);
-  void createTerrainMap(vk::CommandBuffer cmd_buf);
-  void renderTerrain(vk::CommandBuffer cmd_buf);
-  void reallocateTerrainResources();
-  void regenerateTerrain();
 
   bool isVisibleBoundingBox(const glm::vec3& min, const glm::vec3& max, const glm::mat4& mvp) const;
 
 private:
   // Scene and managers
-  std::unique_ptr<SceneManager> sceneMgr;
+  std::unique_ptr<SceneManager>     sceneMgr;
   std::unique_ptr<WorldRendererGui> gui;
-  std::unique_ptr<QuadRenderer> quadRenderer;
+  std::unique_ptr<QuadRenderer>     quadRenderer;
+  std::unique_ptr<TerrainRenderer>  terrainRenderer;
 
   // Pipelines
   etna::GraphicsPipeline staticMeshPipeline{};
-  etna::GraphicsPipeline terrainPipeline{};
-  etna::ComputePipeline perlinPipeline{};
-  etna::ComputePipeline normalPipeline{};
 
   // Images and textures
-  etna::Image mainViewDepth;
-  etna::Image perlinTerrainImage;
-  etna::Image normalMapTerrainImage;
-  etna::Sampler defaultSampler;
+  etna::Image   mainViewDepth;
+  etna::Sampler default_sampler;
 
   // Buffers
   etna::Buffer instanceMatricesBuffer;
   etna::Buffer constants;
-  etna::Buffer uniformParamsBuffer;
-  etna::Buffer perlinValuesBuffer;
+  etna::Buffer uniform_params_buffer;
 
   // Buffer mappings
   void* persistentMapping = nullptr;
   void* uniformMapping = nullptr;
-  void* perlinValuesMapping = nullptr;
 
   // Instance data
   std::vector<InstanceGroup> instanceGroups;
-  std::vector<glm::mat4> instanceMatrices;
-  uint32_t maxInstances = 0;
+  std::vector<glm::mat4>     instanceMatrices;
+  std::uint32_t maxInstances      = 0;
   std::uint32_t renderedInstances = 0;
 
   // Camera parameters
@@ -102,14 +97,6 @@ private:
   float nearPlane;
   float farPlane;
   CameraSpeedLevel cameraSpeedLevel = CameraSpeedLevel::Fast;
-
-  // Terrain parameters
-  std::uint32_t terrainTextureSizeWidth  = 4096;
-  std::uint32_t terrainTextureSizeHeight = 4096;
-  std::uint32_t computeWorkgroupSize = 32;
-  std::uint32_t patchSubdivision = 8;
-  std::uint32_t groupCountX;
-  std::uint32_t groupCountY;
 
   struct WorldRendererConstants{
     glm::mat4 viewProj;

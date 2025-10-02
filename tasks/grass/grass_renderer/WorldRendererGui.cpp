@@ -90,21 +90,35 @@ void WorldRendererGui::drawTerrainTab()
   ImGui::SliderFloat3("Light source position", pos, -10.f, 10.f);
   renderer_.uniformParams.lightPos = {pos[0], pos[1], pos[2]};
 
-  ImGui::InputInt("Terrain Texture Width", reinterpret_cast<int*>(&renderer_.terrainTextureSizeWidth));
-  ImGui::InputInt("Terrain Texture Height", reinterpret_cast<int*>(&renderer_.terrainTextureSizeHeight));
-  ImGui::InputInt("Compute Workgroup Size", reinterpret_cast<int*>(&renderer_.computeWorkgroupSize));
-  ImGui::InputInt("Patch Subdivision", reinterpret_cast<int*>(&renderer_.patchSubdivision));
-  renderer_.groupCountX = (renderer_.terrainTextureSizeWidth + renderer_.computeWorkgroupSize - 1) / renderer_.computeWorkgroupSize;
-  renderer_.groupCountY = (renderer_.terrainTextureSizeHeight + renderer_.computeWorkgroupSize - 1) / renderer_.computeWorkgroupSize;
-  ImGui::Text("Group Count X: %u", renderer_.groupCountX);
-  ImGui::Text("Group Count Y: %u", renderer_.groupCountY);
+  int width = static_cast<int>(renderer_.terrainRenderer->getTerrainTextureSizeWidth());
+  if (ImGui::InputInt("Terrain Texture Width", &width))
+    renderer_.terrainRenderer->setTerrainTextureSizeWidth(static_cast<std::uint32_t>(width));
+
+  int height = static_cast<int>(renderer_.terrainRenderer->getTerrainTextureSizeHeight());
+  if (ImGui::InputInt("Terrain Texture Height", &height))
+    renderer_.terrainRenderer->setTerrainTextureSizeHeight(static_cast<std::uint32_t>(height));
+
+  int workgroup = static_cast<int>(renderer_.terrainRenderer->getComputeWorkgroupSize());
+  if (ImGui::InputInt("Compute Workgroup Size", &workgroup))
+    renderer_.terrainRenderer->setComputeWorkgroupSize(static_cast<std::uint32_t>(workgroup));
+
+  int patch = static_cast<int>(renderer_.terrainRenderer->getPatchSubdivision());
+  if (ImGui::InputInt("Patch Subdivision", &patch))
+    renderer_.terrainRenderer->setPatchSubdivision(static_cast<std::uint32_t>(patch));
+
+  ImGui::Text("Group Count X: %u", renderer_.terrainRenderer->getGroupCountX());
+  ImGui::Text("Group Count Y: %u", renderer_.terrainRenderer->getGroupCountY());
   ImGui::Separator();
 
   ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Perlin Noise Parameters");
-  ImGui::SliderInt  ("Octaves", reinterpret_cast<int*>(&renderer_.perlinParams.octaves), 1, 20);
-  ImGui::SliderFloat("Amplitude", &renderer_.perlinParams.amplitude, 0.0f, 1.0f);
-  ImGui::SliderFloat("Frequency Multiplier", &renderer_.perlinParams.frequencyMultiplier, 1.0f, 4.0f);
-  ImGui::SliderFloat("Scale", &renderer_.perlinParams.scale, 1.0f, 20.0f);
+  PerlinParams params = renderer_.getPerlinParams();
+  bool changed = false;
+  changed |= ImGui::SliderInt  ("Octaves", reinterpret_cast<int*>(&params.octaves), 1, 20);
+  changed |= ImGui::SliderFloat("Amplitude", &params.amplitude, 0.0f, 1.0f);
+  changed |= ImGui::SliderFloat("Frequency Multiplier", &params.frequencyMultiplier, 1.0f, 4.0f);
+  changed |= ImGui::SliderFloat("Scale", &params.scale, 1.0f, 20.0f);
+  if (changed)
+    renderer_.setPerlinParams(params);
 
   if (ImGui::Button("Regenerate Terrain"))
     renderer_.regenerateTerrain();
