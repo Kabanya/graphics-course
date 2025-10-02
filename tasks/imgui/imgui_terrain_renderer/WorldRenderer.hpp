@@ -7,7 +7,9 @@
 #include <etna/ComputePipeline.hpp>
 #include <etna/DescriptorSet.hpp>
 #include <glm/glm.hpp>
+#include <memory>
 
+#include "WorldRendererGui.hpp"
 #include "shaders/UniformParams.h"
 #include "scene/SceneManager.hpp"
 #include "wsi/Keyboard.hpp"
@@ -31,6 +33,7 @@ enum class CameraSpeedLevel
 
 class WorldRenderer
 {
+  friend WorldRendererGui;
 public:
   explicit WorldRenderer();
 
@@ -59,35 +62,54 @@ private:
   bool isVisibleBoundingBox(const glm::vec3& min, const glm::vec3& max, const glm::mat4& mvp) const;
 
 private:
+  // Scene and managers
   std::unique_ptr<SceneManager> sceneMgr;
+  std::unique_ptr<WorldRendererGui> gui;
+  std::unique_ptr<QuadRenderer> quadRenderer;
 
+  // Pipelines
+  etna::GraphicsPipeline staticMeshPipeline{};
+  etna::GraphicsPipeline terrainPipeline{};
+  etna::ComputePipeline perlinPipeline{};
+  etna::ComputePipeline normalPipeline{};
+
+  // Images and textures
   etna::Image mainViewDepth;
   etna::Image perlinTerrainImage;
   etna::Image normalMapTerrainImage;
+  etna::Sampler defaultSampler;
+
+  // Buffers
   etna::Buffer instanceMatricesBuffer;
   etna::Buffer constants;
   etna::Buffer uniformParamsBuffer;
   etna::Buffer perlinValuesBuffer;
 
+  // Buffer mappings
   void* persistentMapping = nullptr;
   void* uniformMapping = nullptr;
   void* perlinValuesMapping = nullptr;
-  uint32_t maxInstances = 0;
 
+  // Instance data
   std::vector<InstanceGroup> instanceGroups;
   std::vector<glm::mat4> instanceMatrices;
+  uint32_t maxInstances = 0;
+  std::uint32_t renderedInstances = 0;
 
+  // Camera parameters
   glm::mat4x4 worldViewProj;
   glm::vec3 camView;
   float nearPlane;
   float farPlane;
+  CameraSpeedLevel cameraSpeedLevel = CameraSpeedLevel::Fast;
 
-  etna::GraphicsPipeline staticMeshPipeline{};
-  etna::ComputePipeline perlinPipeline{};
-  etna::ComputePipeline normalPipeline{};
-  etna::GraphicsPipeline terrainPipeline{};
-
-  std::unique_ptr<QuadRenderer> quadRenderer;
+  // Terrain parameters
+  std::uint32_t terrainTextureSizeWidth  = 4096;
+  std::uint32_t terrainTextureSizeHeight = 4096;
+  std::uint32_t computeWorkgroupSize = 32;
+  std::uint32_t patchSubdivision = 8;
+  std::uint32_t groupCountX;
+  std::uint32_t groupCountY;
 
   struct WorldRendererConstants{
     glm::mat4 viewProj;
@@ -109,29 +131,19 @@ private:
     .scale = 8.0f,
   };
 
-  etna::Sampler defaultSampler;
+  // Render toggles
+  bool enableFrustumCulling    = true;
+  bool enableTessellation      = true;
+  bool enableTerrainRendering  = true;
+  bool enableSceneRendering    = true;
+  bool enableParticleRendering = true;
 
+  // UI toggles
+  bool showPerformanceInfo     = true;
+  bool showTerrainSettings     = true;
+  bool drawDebugTerrainQuad    = false;
+  bool showTabs                = true;
+
+  // Screen resolution
   glm::uvec2 resolution;
-
-  bool enableFrustumCulling   = true;
-  bool enableTessellation     = true;
-  bool enableTerrainRendering = true;
-  bool enableSceneRendering   = true;
-
-  bool showRenderSettings     = true;
-  bool showPerformanceInfo    = true;
-  bool showTerrainSettings    = true;
-  bool drawDebugTerrainQuad   = false;
-  bool showTabs               = true;
-
-  CameraSpeedLevel cameraSpeedLevel = CameraSpeedLevel::Fast;
-
-  std::uint32_t terrainTextureSizeWidth  = 4096;
-  std::uint32_t terrainTextureSizeHeight = 4096;
-  std::uint32_t computeWorkgroupSize = 32;
-  std::uint32_t patchSubdivision = 8;
-  std::uint32_t groupCountX;
-  std::uint32_t groupCountY;
-
-  uint32_t renderedInstances = 0;
 };

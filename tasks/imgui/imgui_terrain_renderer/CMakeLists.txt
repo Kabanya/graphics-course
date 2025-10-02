@@ -4,6 +4,7 @@ add_executable(imgui_terrain_renderer
   App.cpp
   Renderer.cpp
   WorldRenderer.cpp
+  WorldRendererGui.cpp
 )
 
 target_link_libraries(imgui_terrain_renderer
