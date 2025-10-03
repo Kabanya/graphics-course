@@ -35,6 +35,8 @@ public:
   std::uint32_t getPatchSubdivision        () const { return patchSubdivision;         }
   std::uint32_t getGroupCountX             () const { return groupCountX;              }
   std::uint32_t getGroupCountY             () const { return groupCountY;              }
+  float         getTerrainWorldSize        () const { return static_cast<float>
+  /**/                                      (TERRAIN_GRID_SIZE * TERRAIN_SQUARE_SIZE); }
 
   void setTerrainTextureSizeWidth (std::uint32_t w);
   void setTerrainTextureSizeHeight(std::uint32_t h);
@@ -42,6 +44,10 @@ public:
   void setPatchSubdivision        (std::uint32_t s);
 
 private:
+  // Terrain constants (still hardcoded)
+  static constexpr uint32_t TERRAIN_SQUARE_SIZE = 32;
+  static constexpr uint32_t TERRAIN_GRID_SIZE = 1024 / TERRAIN_SQUARE_SIZE; // 32
+
   // Terrain parameters
   std::uint32_t terrainTextureSizeWidth  = 4096;
   std::uint32_t terrainTextureSizeHeight = 4096;

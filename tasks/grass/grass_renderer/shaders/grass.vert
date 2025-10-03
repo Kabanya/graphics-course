@@ -28,7 +28,7 @@ void main()
   uint bladeIndex = gl_VertexIndex / 2;
   uint vertexType = gl_VertexIndex % 2;
 
-  vec3 bladePos = blades.blades[bladeIndex].pos;
+  vec3  bladePos    = blades.blades[bladeIndex].pos;
   float bladeHeight = blades.blades[bladeIndex].height;
 
   vec3 vertexPos = bladePos;

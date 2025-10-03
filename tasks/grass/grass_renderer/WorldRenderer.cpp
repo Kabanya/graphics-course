@@ -62,7 +62,7 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
   persistentMapping = instanceMatricesBuffer.map();
 
   terrainRenderer->allocateResources(constants, uniform_params_buffer, default_sampler);
-  grassRenderer->allocateResources(constants, uniform_params_buffer, default_sampler, terrainRenderer->getPerlinTerrainImage(), static_cast<float>(terrainRenderer->getTerrainTextureSizeWidth()));
+  grassRenderer->allocateResources(constants, uniform_params_buffer, default_sampler, terrainRenderer->getPerlinTerrainImage(), terrainRenderer->getTerrainWorldSize());
 }
 
 void WorldRenderer::loadScene(std::filesystem::path path)

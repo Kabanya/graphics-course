@@ -252,7 +252,7 @@ void TerrainRenderer::setTerrainTextureSizeHeight(std::uint32_t h)
 void TerrainRenderer::setComputeWorkgroupSize(std::uint32_t s)
 {
   computeWorkgroupSize = s;
-  groupCountX = (terrainTextureSizeWidth + computeWorkgroupSize - 1) / computeWorkgroupSize;
+  groupCountX = (terrainTextureSizeWidth  + computeWorkgroupSize - 1) / computeWorkgroupSize;
   groupCountY = (terrainTextureSizeHeight + computeWorkgroupSize - 1) / computeWorkgroupSize;
   regenerateTerrain();
 }

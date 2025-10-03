@@ -65,7 +65,7 @@ private:
   // Parameters
   int grassDensity   = 100; // plotnost'
   float grassHeight  = 5.0f;
-  float terrain_size = 2048.0f;
+  float terrain_size = 1024.0f;
 
   glm::vec3 camera_pos;
   std::uint32_t bladeCount = 100;

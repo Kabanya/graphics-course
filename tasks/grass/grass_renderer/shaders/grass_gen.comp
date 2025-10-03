@@ -9,63 +9,65 @@ struct Blade {
 
 layout(binding = 0, std430) restrict writeonly buffer Blades
 {
-    Blade blades[];
+  Blade blades[];
 } blades;
 
 layout(binding = 1) uniform sampler2D perlinNoise;
 
 layout(std140, set = 0, binding = 2) uniform GrassParams {
-    vec3 eyePos;
-    float terrainSize;
-    float grassHeight;
-    float grassDensity;
+  vec3 eyePos;
+  float terrainSize;
+  float grassHeight;
+  float grassDensity;
 } params;
 
-const vec3 centerCoordTerrain = vec3(0.0, 0.0, 0.0);    // Terrain center
-const vec3 centerCoordWorld = vec3(0.0, -100.0, 0.0); // Terrain base height
+const vec3  centerCoordTerrain = vec3(0.0, 0.0, 0.0);
+const vec3  centerCoordWorld   = vec3(12.0, -299.0, 12.0);
 const float zScale = 200.0;
 
 vec2 getMfW(vec2 mPos)
 {
-    return mPos + centerCoordTerrain.xz;
+  return mPos + centerCoordTerrain.xz;
 }
 
 vec2 getWfM(vec2 wPos)
 {
-    return wPos - centerCoordTerrain.xz;
+  return wPos - centerCoordTerrain.xz;
 }
 
 vec2 getTfM(vec2 mPos)
 {
-    return mPos / params.terrainSize;
+  // return (mPos / params.terrainSize);
+  return (mPos + params.terrainSize * 0.5) / params.terrainSize;
 }
 
 vec2 getMfI(vec2 iPos)
 {
-    return iPos;
+  return iPos;
 }
 
 void main()
 {
-    uvec2 id = gl_GlobalInvocationID.xy;
-    uint stride = gl_NumWorkGroups.x * 32u;
-    uint index = id.y * stride + id.x;
+  uvec2 id    = gl_GlobalInvocationID.xy;
+  uint stride = gl_NumWorkGroups.x * 32u;
+  uint index  = id.y * stride + id.x;
 
-    uint totalBlades = uint(params.grassDensity * 100.0);
-    if (index >= totalBlades) return;
+  uint totalBlades = uint(params.grassDensity * 100.0);
+  if (index >= totalBlades) return;
 
-    uint gridSize = uint(ceil(sqrt(float(totalBlades))));
-    uint gridX = index % gridSize;
-    uint gridY = index / gridSize;
-    float spacing = params.terrainSize / max(float(gridSize) - 1.0, 1.0);
-    vec2 gridPos = vec2(gridX, gridY) * spacing - params.terrainSize * 0.5;
+  uint gridSize = uint(ceil(sqrt(float(totalBlades))));
+  uint gridX    = index % gridSize;
+  uint gridY    = index / gridSize;
+  float spacing = params.terrainSize / max(float(gridSize) - 1.0, 1.0);
+  vec2 gridPos  = vec2(gridX, gridY) * spacing - params.terrainSize * 0.5;
 
-    vec2 texCoord = getTfM(gridPos);
-    float height = 0.0; // Constant surface
+  vec2 texCoord = getTfM(gridPos);
+  texCoord.y = 1.0 - texCoord.y;
+  float height  = texture(perlinNoise, texCoord).x * zScale;
 
-    vec3 posModel = vec3(gridPos.x, height, gridPos.y);
-    vec3 posWorld = posModel + centerCoordWorld;
+  vec3 posModel = vec3(gridPos.x, height, gridPos.y);
+  vec3 posWorld = posModel + centerCoordWorld;
 
-    blades.blades[index].pos = posWorld;
-    blades.blades[index].height = params.grassHeight;
+  blades.blades[index].pos = posWorld;
+  blades.blades[index].height = params.grassHeight;
 }

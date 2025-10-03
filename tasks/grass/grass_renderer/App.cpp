@@ -26,6 +26,7 @@ App::App()
 
   renderer->loadScene(GRAPHICS_COURSE_RESOURCES_ROOT "/scenes/Avocado/Avocado.gltf");
 }
+
 void App::run()
 {
   double lastTime = windowing.getTime();
