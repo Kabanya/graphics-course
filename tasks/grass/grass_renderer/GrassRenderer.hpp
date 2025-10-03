@@ -34,6 +34,7 @@ public:
     etna::Buffer&      in_uniform_params_buffer,
     etna::Sampler&     in_default_sampler,
     const etna::Image& in_height_map,
+    const etna::Image& in_wind_map,
     float              in_terrain_size);
   void loadShaders();
   void setupPipelines(vk::Format swapchain_format);
@@ -67,6 +68,7 @@ private:
   etna::Buffer*  uniform_params_buffer = nullptr;
   etna::Sampler* default_sampler = nullptr;
   const etna::Image* height_map = nullptr;
+  const etna::Image* wind_map = nullptr;
 
   // Parameters
   int grassDensity   = 100; // plotnost'

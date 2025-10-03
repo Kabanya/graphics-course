@@ -161,6 +161,10 @@ void WorldRendererGui::drawGrassTab()
     renderer_.grassRenderer->setGrassRadius(grassRadius);
     oldGrassRadius = grassRadius;
   }
+
+  ImGui::Separator();
+  ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Wind Parameters");
+  ImGui::SliderFloat("Wind Strength", &renderer_.uniformParams.windStrength, 0.0f, 5.0f);
 }
 
 void WorldRendererGui::drawInfoTab() const

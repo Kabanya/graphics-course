@@ -27,6 +27,17 @@ layout(std140, set = 0, binding = 3) uniform GrassParams {
   float grassWidth;
 } params;
 
+layout(binding = 4) uniform sampler2D windMap;
+
+layout(std140, set = 0, binding = 5) uniform AppData
+{
+  mat4 lightMatrix;
+  vec3 lightPos;
+  float time;
+  vec3 baseColor;
+  float windStrength;
+} appData;
+
 layout(location = 0) out VS_OUT
 {
   vec3 wPos;
@@ -63,6 +74,15 @@ void main()
   );
 
   vec3 vertexPos = bladePos + offsets[vertexInBlade];
+
+  // Sample wind
+  vec2 windTexCoord = (bladePos.xz / params.terrainSize) * 0.5 + 0.5; // assuming terrain from -terrainSize/2 to terrainSize/2
+  vec2 windDir = texture(windMap, windTexCoord).xy;
+  float windFactor = sin(appData.time * 5.0 + bladePos.x * 0.01 + bladePos.z * 0.01) * 0.5 + 0.5; // animate over time
+  float heightFactor = offsets[vertexInBlade].y / bladeHeight; // 0 at bottom, 1 at top
+  vec3 windOffset = vec3(windDir.x, 0.0, windDir.y) * appData.windStrength * windFactor * heightFactor;
+
+  vertexPos += windOffset;
 
   vs_out.wPos = vertexPos;
   vs_out.normal = normalize(cross(up, right));

@@ -23,11 +23,14 @@ public:
   void loadShaders();
   void setupPipelines(vk::Format swapchain_format);
   void update(const PerlinParams& params);
+  void updateWind(float time);
   void render(vk::CommandBuffer cmd_buf);
   void regenerateTerrain();
   void createTerrainMap(vk::CommandBuffer cmd_buf);
+  void createWindMap(vk::CommandBuffer cmd_buf);
 
   const etna::Image& getPerlinTerrainImage () const { return perlinTerrainImage;       }
+  const etna::Image& getWindImage          () const { return windImage;                }
 
   std::uint32_t getTerrainTextureSizeWidth () const { return terrainTextureSizeWidth;  }
   std::uint32_t getTerrainTextureSizeHeight() const { return terrainTextureSizeHeight; }
@@ -59,14 +62,18 @@ private:
   // Images and textures
   etna::Image perlinTerrainImage;
   etna::Image normalMapTerrainImage;
+  etna::Image windImage;
 
   // Buffers
   etna::Buffer perlinValuesBuffer;
+  etna::Buffer windValuesBuffer;
   void* perlinValuesMapping = nullptr;
+  void* windValuesMapping = nullptr;
 
   // Pipelines
   etna::ComputePipeline  perlinPipeline {};
   etna::ComputePipeline  normalPipeline {};
+  etna::ComputePipeline  windPipeline {};
   etna::GraphicsPipeline terrainPipeline{};
 
   PerlinParams perlinParams{
@@ -74,6 +81,15 @@ private:
     .amplitude = 0.5f,
     .frequencyMultiplier = 2.0f,
     .scale = 8.0f,
+    .time = 0.0f,
+  };
+
+  PerlinParams windParams{
+    .octaves = 5u,
+    .amplitude = 0.5f,
+    .frequencyMultiplier = 2.0f,
+    .scale = 4.0f,
+    .time = 0.0f,
   };
 
   // References to shared buffers

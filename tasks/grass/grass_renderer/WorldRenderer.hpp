@@ -111,6 +111,7 @@ private:
     .lightPos = {},
     .time = {},
     .baseColor = {0.9f, 0.92f, 1.0f},
+    .windStrength = 2.0f,
   };
 
   PerlinParams perlinParams{
@@ -118,6 +119,7 @@ private:
     .amplitude = 0.5f,
     .frequencyMultiplier = 2.0f,
     .scale = 8.0f,
+    .time = 0.0f,
   };
 
   // Render toggles

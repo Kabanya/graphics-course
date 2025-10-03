@@ -24,4 +24,5 @@ target_add_shaders(grass_renderer
   shaders/grass_gen.comp
   shaders/grass.vert
   shaders/grass.frag
+  shaders/wind_perlin.comp
 )

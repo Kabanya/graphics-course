@@ -12,12 +12,14 @@ void GrassRenderer::allocateResources(
   etna::Buffer&      in_uniform_params_buffer,
   etna::Sampler&     in_default_sampler,
   const etna::Image& in_height_map,
+  const etna::Image& in_wind_map,
   float              in_terrain_size)
 {
   this->constants             = &in_constants;
   this->uniform_params_buffer = &in_uniform_params_buffer;
   this->default_sampler       = &in_default_sampler;
   this->height_map            = &in_height_map;
+  this->wind_map              = &in_wind_map;
   this->terrain_size          = in_terrain_size;
 
   auto& ctx = etna::get_context();
@@ -98,6 +100,8 @@ void GrassRenderer::render(vk::CommandBuffer cmd_buf) {
         etna::Binding{0, bladesBuffer.genBinding()},
         etna::Binding{2, constants->genBinding()},
         etna::Binding{3, grassParamsBuffer.genBinding()},
+        etna::Binding{4, wind_map->genBinding(default_sampler->get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+        etna::Binding{5, uniform_params_buffer->genBinding()},
       });
     cmd_buf.bindDescriptorSets(
       vk::PipelineBindPoint::eGraphics, grassRenderPipeline.getVkPipelineLayout(), 0,

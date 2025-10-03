@@ -11,8 +11,8 @@ TerrainRenderer::TerrainRenderer()
 }
 
 void TerrainRenderer::allocateResources(
-  etna::Buffer&  in_constants, 
-  etna::Buffer&  in_uniform_params_buffer,  
+  etna::Buffer&  in_constants,
+  etna::Buffer&  in_uniform_params_buffer,
   etna::Sampler& in_default_sampler)
 {
   this->constants             = &in_constants;
@@ -30,7 +30,17 @@ void TerrainRenderer::allocateResources(
   });
   perlinValuesMapping = perlinValuesBuffer.map();
 
+  windValuesBuffer = ctx.createBuffer(etna::Buffer::CreateInfo{
+    .size = sizeof(PerlinParams),
+    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+    .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+    .name = "wind_values",
+  });
+  windValuesMapping = windValuesBuffer.map();
+
   std::memcpy(perlinValuesMapping, &perlinParams, sizeof(PerlinParams));
+  std::memcpy(windValuesMapping, &windParams, sizeof(PerlinParams));
 
   perlinTerrainImage = ctx.createImage(etna::Image::CreateInfo{
     .extent = vk::Extent3D{terrainTextureSizeWidth, terrainTextureSizeHeight, 1},
@@ -44,10 +54,17 @@ void TerrainRenderer::allocateResources(
     .format = vk::Format::eR32G32B32A32Sfloat,
     .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
 
+  windImage = ctx.createImage(etna::Image::CreateInfo{
+    .extent = vk::Extent3D{terrainTextureSizeWidth, terrainTextureSizeHeight, 1},
+    .name = "wind_map",
+    .format = vk::Format::eR32G32B32A32Sfloat,
+    .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
+
   auto cmdManager = ctx.createOneShotCmdMgr();
   auto cmdBuf = cmdManager->start();
   ETNA_CHECK_VK_RESULT(cmdBuf.begin(vk::CommandBufferBeginInfo{}));
   createTerrainMap(cmdBuf);
+  createWindMap(cmdBuf);
   ETNA_CHECK_VK_RESULT(cmdBuf.end());
 
   cmdManager->submitAndWait(cmdBuf);
@@ -57,6 +74,7 @@ void TerrainRenderer::loadShaders()
 {
   etna::create_program("perlin_terrain", {GRASS_RENDERER_SHADERS_ROOT "terrain_perlin.comp.spv"});
   etna::create_program("normal_map_generation", {GRASS_RENDERER_SHADERS_ROOT "terrain_normal.comp.spv"});
+  etna::create_program("wind_perlin", {GRASS_RENDERER_SHADERS_ROOT "wind_perlin.comp.spv"});
   etna::create_program(
     "terrain_render",
     {GRASS_RENDERER_SHADERS_ROOT "quad.vert.spv",
@@ -71,6 +89,7 @@ void TerrainRenderer::setupPipelines(vk::Format swapchain_format)
 
   perlinPipeline = pipelineManager.createComputePipeline("perlin_terrain", {});
   normalPipeline = pipelineManager.createComputePipeline("normal_map_generation", {});
+  windPipeline = pipelineManager.createComputePipeline("wind_perlin", {});
   terrainPipeline = pipelineManager.createGraphicsPipeline(
     "terrain_render",
     etna::GraphicsPipeline::CreateInfo{
@@ -94,6 +113,20 @@ void TerrainRenderer::update(const PerlinParams& params)
 {
   perlinParams = params;
   std::memcpy(perlinValuesMapping, &perlinParams, sizeof(PerlinParams));
+}
+
+void TerrainRenderer::updateWind(float time)
+{
+  windParams.time = time;
+  std::memcpy(windValuesMapping, &windParams, sizeof(PerlinParams));
+
+  auto& ctx = etna::get_context();
+  auto cmdManager = ctx.createOneShotCmdMgr();
+  auto cmdBuf = cmdManager->start();
+  ETNA_CHECK_VK_RESULT(cmdBuf.begin(vk::CommandBufferBeginInfo{}));
+  createWindMap(cmdBuf);
+  ETNA_CHECK_VK_RESULT(cmdBuf.end());
+  cmdManager->submitAndWait(cmdBuf);
 }
 
 void TerrainRenderer::render(vk::CommandBuffer cmd_buf)
@@ -229,6 +262,55 @@ void TerrainRenderer::createTerrainMap(vk::CommandBuffer cmd_buf)
     cmd_buf,
     normalMapTerrainImage.get(),
     vk::PipelineStageFlagBits2::eTessellationEvaluationShader,
+    vk::AccessFlagBits2::eShaderSampledRead,
+    vk::ImageLayout::eReadOnlyOptimal,
+    vk::ImageAspectFlagBits::eColor);
+  etna::flush_barriers(cmd_buf);
+}
+
+void TerrainRenderer::createWindMap(vk::CommandBuffer cmd_buf)
+{
+  etna::set_state(
+    cmd_buf,
+    windImage.get(),
+    vk::PipelineStageFlagBits2::eComputeShader,
+    vk::AccessFlagBits2::eShaderWrite,
+    vk::ImageLayout::eGeneral,
+    vk::ImageAspectFlagBits::eColor);
+  etna::flush_barriers(cmd_buf);
+
+  {
+    auto windInfo = etna::get_shader_program("wind_perlin");
+
+    auto binding = windImage.genBinding(default_sampler->get(), vk::ImageLayout::eGeneral, {});
+
+    auto set = etna::create_descriptor_set(
+      windInfo.getDescriptorLayoutId(0),
+      cmd_buf,
+      {
+        etna::Binding{0, binding},
+        etna::Binding{1, windValuesBuffer.genBinding()},
+      });
+
+    vk::DescriptorSet vkSet = set.getVkSet();
+
+    cmd_buf.bindPipeline(vk::PipelineBindPoint::eCompute, windPipeline.getVkPipeline());
+    cmd_buf.bindDescriptorSets(
+      vk::PipelineBindPoint::eCompute,
+      windPipeline.getVkPipelineLayout(),
+      0,
+      1,
+      &vkSet,
+      0,
+      nullptr);
+
+    cmd_buf.dispatch(terrainTextureSizeWidth / computeWorkgroupSize, terrainTextureSizeHeight / computeWorkgroupSize, 1);
+  }
+
+  etna::set_state(
+    cmd_buf,
+    windImage.get(),
+    vk::PipelineStageFlagBits2::eVertexShader,
     vk::AccessFlagBits2::eShaderSampledRead,
     vk::ImageLayout::eReadOnlyOptimal,
     vk::ImageAspectFlagBits::eColor);

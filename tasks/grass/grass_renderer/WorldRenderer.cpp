@@ -62,7 +62,7 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
   persistentMapping = instanceMatricesBuffer.map();
 
   terrainRenderer->allocateResources(constants, uniform_params_buffer, default_sampler);
-  grassRenderer->allocateResources(constants, uniform_params_buffer, default_sampler, terrainRenderer->getPerlinTerrainImage(), terrainRenderer->getTerrainWorldSize());
+  grassRenderer->allocateResources(constants, uniform_params_buffer, default_sampler, terrainRenderer->getPerlinTerrainImage(), terrainRenderer->getWindImage(), terrainRenderer->getTerrainWorldSize());
 }
 
 void WorldRenderer::loadScene(std::filesystem::path path)
@@ -221,6 +221,7 @@ void WorldRenderer::update(const FramePacket& packet)
   constants.unmap();
 
   terrainRenderer->update(perlinParams);
+  terrainRenderer->updateWind(uniformParams.time);
   grassRenderer->update(camView);
 
   auto instanceMeshes = sceneMgr->getInstanceMeshes();

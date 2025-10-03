@@ -9,6 +9,7 @@ struct PerlinParams
   shader_float amplitude;
   shader_float frequencyMultiplier;
   shader_float scale;
+  shader_float time;
 };
 
 struct UniformParams
@@ -17,6 +18,7 @@ struct UniformParams
   shader_vec3 lightPos;
   shader_float time;
   shader_vec3 baseColor;
+  shader_float windStrength;
 };
 
 #endif // UNIFORM_PARAMS_H_INCLUDED
