@@ -21,6 +21,7 @@ struct GrassParams {
   float grassHeight;
   float grassDensity;
   float grassRadius;
+  float grassWidth;
 };
 
 class GrassRenderer
@@ -43,10 +44,12 @@ public:
   void setGrassDensity(int density);
   void setGrassHeight (float height);
   void setGrassRadius (float radius);
+  void setGrassWidth  (float width);
 
   float    getGrassHeight () const { return grassHeight;  }
   int      getGrassDensity() const { return grassDensity; }
   float    getGrassRadius () const { return grassRadius;  }
+  float    getGrassWidth  () const { return grassWidth;   }
   uint32_t getBladeCount  () const { return bladeCount;   }
 
 private:
@@ -69,6 +72,7 @@ private:
   int grassDensity   = 100; // plotnost'
   float grassHeight  = 5.0f;
   float grassRadius  = 100.0f;
+  float grassWidth   = 0.1f;
   float terrain_size = 1024.0f;
 
   glm::vec3 camera_pos;

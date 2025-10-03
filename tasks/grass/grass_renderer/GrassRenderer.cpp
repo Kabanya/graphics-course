@@ -58,7 +58,7 @@ void GrassRenderer::setupPipelines(vk::Format swapchain_format) {
   grassRenderPipeline = pipelineManager.createGraphicsPipeline(
     "grass_render",
     etna::GraphicsPipeline::CreateInfo{
-      .inputAssemblyConfig = {.topology = vk::PrimitiveTopology::eLineList},
+      .inputAssemblyConfig = {.topology = vk::PrimitiveTopology::eTriangleList},
       .rasterizationConfig = vk::PipelineRasterizationStateCreateInfo{
         .polygonMode = vk::PolygonMode::eFill,
         .cullMode = vk::CullModeFlagBits::eNone,
@@ -81,6 +81,7 @@ void GrassRenderer::update(const glm::vec3& in_camera_pos)
   params.grassHeight  = grassHeight;
   params.grassDensity = static_cast<float>(grassDensity);
   params.grassRadius  = grassRadius;
+  params.grassWidth   = grassWidth;
   bladeCount = static_cast<std::uint32_t>(grassDensity * 100.0f);
   std::memcpy(grassParamsMapping, &params, sizeof(GrassParams));
 }
@@ -96,14 +97,14 @@ void GrassRenderer::render(vk::CommandBuffer cmd_buf) {
       {
         etna::Binding{0, bladesBuffer.genBinding()},
         etna::Binding{2, constants->genBinding()},
+        etna::Binding{3, grassParamsBuffer.genBinding()},
       });
     cmd_buf.bindDescriptorSets(
       vk::PipelineBindPoint::eGraphics, grassRenderPipeline.getVkPipelineLayout(), 0,
       {descSet.getVkSet()}, {});
   }
 
-  // Draw
-  cmd_buf.draw(bladeCount * 2, 1, 0, 0);
+  cmd_buf.draw(bladeCount * 6, 1, 0, 0);
 }
 
 void GrassRenderer::generateGrass(vk::CommandBuffer cmd_buf) {
@@ -143,4 +144,9 @@ void GrassRenderer::setGrassHeight(float height)
 void GrassRenderer::setGrassRadius(float radius)
 {
   grassRadius = radius;
+}
+
+void GrassRenderer::setGrassWidth(float width)
+{
+  grassWidth = width;
 }

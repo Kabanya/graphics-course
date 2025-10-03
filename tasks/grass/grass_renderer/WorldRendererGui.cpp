@@ -132,8 +132,11 @@ void WorldRendererGui::drawGrassTab()
   float grassHeight = renderer_.grassRenderer->getGrassHeight();
   if (ImGui::SliderFloat("Grass Height", &grassHeight, 0.1f, 20.0f))
     renderer_.grassRenderer->setGrassHeight(grassHeight);
+  float grassWidth = renderer_.grassRenderer->getGrassWidth();
+  if (ImGui::SliderFloat("Grass Width", &grassWidth, 0.01f, 1.0f))
+    renderer_.grassRenderer->setGrassWidth(grassWidth);
   int grassDensity = renderer_.grassRenderer->getGrassDensity();
-  if (ImGui::InputInt("Grass Density", &grassDensity, 1, 1000))
+  if (ImGui::InputInt("Grass Density", &grassDensity, 1, 250))
   {
     if (syncDensityRadius && oldGrassDensity > 0)
     {

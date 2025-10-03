@@ -18,15 +18,25 @@ layout(std140, set = 0, binding = 2) uniform Constants
   int enableTessellation;
 } constants;
 
+layout(std140, set = 0, binding = 3) uniform GrassParams {
+  vec3 eyePos;
+  float terrainSize;
+  float grassHeight;
+  float grassDensity;
+  float grassRadius;
+  float grassWidth;
+} params;
+
 layout(location = 0) out VS_OUT
 {
   vec3 wPos;
+  vec3 normal;
 } vs_out;
 
 void main()
 {
-  uint bladeIndex = gl_VertexIndex / 2;
-  uint vertexType = gl_VertexIndex % 2;
+  uint bladeIndex = gl_VertexIndex / 6;
+  uint vertexInBlade = gl_VertexIndex % 6;
 
   vec3  bladePos    = blades.blades[bladeIndex].pos;
   float bladeHeight = blades.blades[bladeIndex].height;
@@ -37,12 +47,24 @@ void main()
     return;
   }
 
-  vec3 vertexPos = bladePos;
-  if (vertexType == 1)
-  {
-    vertexPos.y += bladeHeight;
-  }
+  vec3 dir = normalize(bladePos - constants.camView.xyz);
+  vec3 right = normalize(cross(dir, vec3(0, 1, 0)));
+  vec3 up = normalize(cross(right, dir));
+
+  float halfWidth = params.grassWidth * 0.5;
+
+  vec3 offsets[6] = vec3[6](
+    -right * halfWidth, // bottom left
+    right * halfWidth,  // bottom right
+    -right * halfWidth + up * bladeHeight, // top left
+    -right * halfWidth + up * bladeHeight, // top left again
+    right * halfWidth,  // bottom right
+    right * halfWidth + up * bladeHeight   // top right
+  );
+
+  vec3 vertexPos = bladePos + offsets[vertexInBlade];
 
   vs_out.wPos = vertexPos;
+  vs_out.normal = normalize(cross(up, right));
   gl_Position = constants.viewProj * vec4(vertexPos, 1.0);
 }
