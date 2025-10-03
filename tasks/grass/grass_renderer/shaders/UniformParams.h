@@ -19,6 +19,8 @@ struct UniformParams
   shader_float time;
   shader_vec3 baseColor;
   shader_float windStrength;
+  shader_float windSpeed;
+  shader_float enableDynamicWind;
 };
 
 #endif // UNIFORM_PARAMS_H_INCLUDED

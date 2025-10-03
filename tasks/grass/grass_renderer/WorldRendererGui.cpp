@@ -165,6 +165,17 @@ void WorldRendererGui::drawGrassTab()
   ImGui::Separator();
   ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Wind Parameters");
   ImGui::SliderFloat("Wind Strength", &renderer_.uniformParams.windStrength, 0.0f, 5.0f);
+  ImGui::SliderFloat("Wind Speed", &renderer_.uniformParams.windSpeed, 0.0f, 10.0f);
+
+  ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Wind Perlin Parameters");
+  PerlinParams windParams = renderer_.getWindParams();
+  bool windChanged = false;
+  windChanged |= ImGui::SliderInt  ("Wind Octaves", reinterpret_cast<int*>(&windParams.octaves), 1, 20);
+  windChanged |= ImGui::SliderFloat("Wind Amplitude", &windParams.amplitude, 0.0f, 1.0f);
+  windChanged |= ImGui::SliderFloat("Wind Frequency Multiplier", &windParams.frequencyMultiplier, 1.0f, 4.0f);
+  windChanged |= ImGui::SliderFloat("Wind Scale", &windParams.scale, 1.0f, 20.0f);
+  if (windChanged)
+    renderer_.setWindParams(windParams);
 }
 
 void WorldRendererGui::drawInfoTab() const

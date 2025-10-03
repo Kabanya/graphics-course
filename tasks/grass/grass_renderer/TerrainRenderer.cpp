@@ -317,6 +317,19 @@ void TerrainRenderer::createWindMap(vk::CommandBuffer cmd_buf)
   etna::flush_barriers(cmd_buf);
 }
 
+void TerrainRenderer::setWindParams(const PerlinParams& params)
+{
+  windParams = params;
+  std::memcpy(windValuesMapping, &windParams, sizeof(PerlinParams));
+  auto& ctx = etna::get_context();
+  auto cmdManager = ctx.createOneShotCmdMgr();
+  auto cmdBuf = cmdManager->start();
+  ETNA_CHECK_VK_RESULT(cmdBuf.begin(vk::CommandBufferBeginInfo{}));
+  createWindMap(cmdBuf);
+  ETNA_CHECK_VK_RESULT(cmdBuf.end());
+  cmdManager->submitAndWait(cmdBuf);
+}
+
 void TerrainRenderer::setTerrainTextureSizeWidth(std::uint32_t w)
 {
   terrainTextureSizeWidth = w;

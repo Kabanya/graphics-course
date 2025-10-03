@@ -1,5 +1,6 @@
 #pragma once
 
+#include "TerrainRenderer.hpp"
 #include <etna/Image.hpp>
 #include <etna/Sampler.hpp>
 #include <etna/Buffer.hpp>
@@ -7,8 +8,6 @@
 #include <etna/ComputePipeline.hpp>
 #include <glm/glm.hpp>
 #include <vulkan/vulkan.hpp>
-
-// #include "shaders/UniformParams.h"
 
 struct Blade {
   glm::vec3 pos;
@@ -71,11 +70,11 @@ private:
   const etna::Image* wind_map = nullptr;
 
   // Parameters
-  int grassDensity   = 100; // plotnost'
+  int   grassDensity = 400;
   float grassHeight  = 5.0f;
-  float grassRadius  = 100.0f;
+  float grassRadius  = 200.0f;
   float grassWidth   = 0.1f;
-  float terrain_size = 1024.0f;
+  float terrain_size = TerrainRenderer::TERRAIN_GRID_SIZE;
 
   glm::vec3 camera_pos;
   std::uint32_t bladeCount = 100;
@@ -83,5 +82,5 @@ private:
   // Compute workgroup sizes
   std::uint32_t groupCountX = 4;
   std::uint32_t groupCountY = 4;
-  std::uint32_t MAX_BLADES = 10'000'000; // TODO: make dynamic
+  std::uint32_t MAX_BLADES = grassDensity * 100'000;
 };

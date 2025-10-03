@@ -52,6 +52,8 @@ public:
     vk::CommandBuffer cmd_buf, vk::Image target_image, vk::ImageView target_image_view);
   const PerlinParams& getPerlinParams() const;
   void setPerlinParams(const PerlinParams& params);
+  const PerlinParams& getWindParams() const;
+  void setWindParams(const PerlinParams& params);
   void regenerateTerrain();
 
   float getCameraSpeed() const;
@@ -112,6 +114,8 @@ private:
     .time = {},
     .baseColor = {0.9f, 0.92f, 1.0f},
     .windStrength = 2.0f,
+    .windSpeed = 5.0f,
+    .enableDynamicWind = 1.0f,
   };
 
   PerlinParams perlinParams{
@@ -122,6 +126,14 @@ private:
     .time = 0.0f,
   };
 
+  PerlinParams windParams{
+    .octaves = 5u,
+    .amplitude = 0.5f,
+    .frequencyMultiplier = 2.0f,
+    .scale = 4.0f,
+    .time = 0.0f,
+  };
+
   // Render toggles
   bool enableFrustumCulling    = true;
   bool enableTessellation      = true;
@@ -129,6 +141,7 @@ private:
   bool enableSceneRendering    = true;
   bool enableGrassRendering    = true;
   bool enableParticleRendering = true;
+  bool enableDynamicWind       = true;
 
   // UI toggles
   bool showPerformanceInfo     = true;

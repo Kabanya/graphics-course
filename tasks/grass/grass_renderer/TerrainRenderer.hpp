@@ -29,8 +29,10 @@ public:
   void createTerrainMap(vk::CommandBuffer cmd_buf);
   void createWindMap(vk::CommandBuffer cmd_buf);
 
-  const etna::Image& getPerlinTerrainImage () const { return perlinTerrainImage;       }
-  const etna::Image& getWindImage          () const { return windImage;                }
+  const etna::Image&  getPerlinTerrainImage() const { return perlinTerrainImage;       }
+  const etna::Image&  getWindImage         () const { return windImage;                }
+  const PerlinParams& getPerlinParams      () const { return perlinParams;             }
+  const PerlinParams& getWindParams        () const { return windParams;               }
 
   std::uint32_t getTerrainTextureSizeWidth () const { return terrainTextureSizeWidth;  }
   std::uint32_t getTerrainTextureSizeHeight() const { return terrainTextureSizeHeight; }
@@ -39,17 +41,21 @@ public:
   std::uint32_t getGroupCountX             () const { return groupCountX;              }
   std::uint32_t getGroupCountY             () const { return groupCountY;              }
   float         getTerrainWorldSize        () const { return static_cast<float>
-  /**/                                      (TERRAIN_GRID_SIZE * TERRAIN_SQUARE_SIZE); }
+  /**/                                     (TERRAIN_GRID_COUNT  * TERRAIN_SQUARE_SIZE);}
 
+  void setWindParams              (const PerlinParams& params);
   void setTerrainTextureSizeWidth (std::uint32_t w);
   void setTerrainTextureSizeHeight(std::uint32_t h);
   void setComputeWorkgroupSize    (std::uint32_t s);
   void setPatchSubdivision        (std::uint32_t s);
 
+public:
+  static constexpr std::uint32_t TERRAIN_GRID_SIZE   = 1024;
+
 private:
-  // Terrain constants (still hardcoded)
-  static constexpr uint32_t TERRAIN_SQUARE_SIZE = 32;
-  static constexpr uint32_t TERRAIN_GRID_SIZE = 1024 / TERRAIN_SQUARE_SIZE; // 32
+  // Terrain constants
+  static constexpr std::uint32_t TERRAIN_SQUARE_SIZE = 32;
+  static constexpr std::uint32_t TERRAIN_GRID_COUNT  = TERRAIN_GRID_SIZE / TERRAIN_SQUARE_SIZE;
 
   // Terrain parameters
   std::uint32_t terrainTextureSizeWidth  = 4096;

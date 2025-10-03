@@ -18,7 +18,8 @@ layout(std140, set = 0, binding = 2) uniform Constants
   int enableTessellation;
 } constants;
 
-layout(std140, set = 0, binding = 3) uniform GrassParams {
+layout(std140, set = 0, binding = 3) uniform GrassParams
+{
   vec3 eyePos;
   float terrainSize;
   float grassHeight;
@@ -36,6 +37,8 @@ layout(std140, set = 0, binding = 5) uniform AppData
   float time;
   vec3 baseColor;
   float windStrength;
+  float windSpeed;
+  float enableDynamicWind;
 } appData;
 
 layout(location = 0) out VS_OUT
@@ -46,7 +49,7 @@ layout(location = 0) out VS_OUT
 
 void main()
 {
-  uint bladeIndex = gl_VertexIndex / 6;
+  uint bladeIndex    = gl_VertexIndex / 6;
   uint vertexInBlade = gl_VertexIndex % 6;
 
   vec3  bladePos    = blades.blades[bladeIndex].pos;
@@ -65,24 +68,25 @@ void main()
   float halfWidth = params.grassWidth * 0.5;
 
   vec3 offsets[6] = vec3[6](
-    -right * halfWidth, // bottom left
-    right * halfWidth,  // bottom right
+    -right * halfWidth,                    // bottom left
+    right  * halfWidth,                    // bottom right
     -right * halfWidth + up * bladeHeight, // top left
     -right * halfWidth + up * bladeHeight, // top left again
-    right * halfWidth,  // bottom right
-    right * halfWidth + up * bladeHeight   // top right
+    right  * halfWidth,                    // bottom right
+    right  * halfWidth + up * bladeHeight  // top right
   );
 
   vec3 vertexPos = bladePos + offsets[vertexInBlade];
 
   // Sample wind
-  vec2 windTexCoord = (bladePos.xz / params.terrainSize) * 0.5 + 0.5; // assuming terrain from -terrainSize/2 to terrainSize/2
-  vec2 windDir = texture(windMap, windTexCoord).xy;
-  float windFactor = sin(appData.time * 5.0 + bladePos.x * 0.01 + bladePos.z * 0.01) * 0.5 + 0.5; // animate over time
-  float heightFactor = offsets[vertexInBlade].y / bladeHeight; // 0 at bottom, 1 at top
-  vec3 windOffset = vec3(windDir.x, 0.0, windDir.y) * appData.windStrength * windFactor * heightFactor;
+  vec2  windTexCoord = (bladePos.xz / params.terrainSize) * 0.5 + 0.5;
+  vec2  windDir      = texture(windMap, windTexCoord).xy;
+  float windFactor   = sin(appData.time * appData.windSpeed + bladePos.x * 0.01 + bladePos.z * 0.01) * 0.5 + 0.5;
+  float heightFactor = offsets[vertexInBlade].y / bladeHeight;
+  vec3  windOffset   = vec3(windDir.x, 0.0, windDir.y) * appData.windStrength * windFactor * heightFactor;
 
-  vertexPos += windOffset;
+  if (appData.enableDynamicWind > 0.5)
+    vertexPos += windOffset;
 
   vs_out.wPos = vertexPos;
   vs_out.normal = normalize(cross(up, right));

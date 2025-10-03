@@ -62,6 +62,8 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
   persistentMapping = instanceMatricesBuffer.map();
 
   terrainRenderer->allocateResources(constants, uniform_params_buffer, default_sampler);
+  perlinParams = terrainRenderer->getPerlinParams();
+  windParams   = terrainRenderer->getWindParams  ();
   grassRenderer->allocateResources(constants, uniform_params_buffer, default_sampler, terrainRenderer->getPerlinTerrainImage(), terrainRenderer->getWindImage(), terrainRenderer->getTerrainWorldSize());
 }
 
@@ -207,6 +209,9 @@ void WorldRenderer::update(const FramePacket& packet)
     worldViewProj = packet.mainCam.projTm(aspect) * packet.mainCam.viewTm();
     camView = packet.mainCam.position;
   }
+
+  uniformParams.time = packet.currentTime;
+  uniformParams.enableDynamicWind = enableDynamicWind ? 1.0f : 0.0f;
 
   std::memcpy(uniformMapping, &uniformParams, sizeof(UniformParams));
 
@@ -465,6 +470,17 @@ void WorldRenderer::setPerlinParams(const PerlinParams& params)
 {
   perlinParams = params;
   terrainRenderer->update(perlinParams);
+}
+
+const PerlinParams& WorldRenderer::getWindParams() const
+{
+  return windParams;
+}
+
+void WorldRenderer::setWindParams(const PerlinParams& params)
+{
+  windParams = params;
+  terrainRenderer->setWindParams(windParams);
 }
 
 void WorldRenderer::regenerateTerrain()
