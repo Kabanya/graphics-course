@@ -76,10 +76,11 @@ void GrassRenderer::update(const glm::vec3& in_camera_pos)
 {
   this->camera_pos = in_camera_pos;
   GrassParams params;
-  params.eyePos = in_camera_pos;
-  params.terrainSize = terrain_size;
-  params.grassHeight = grassHeight;
+  params.eyePos       = in_camera_pos;
+  params.terrainSize  = terrain_size;
+  params.grassHeight  = grassHeight;
   params.grassDensity = static_cast<float>(grassDensity);
+  params.grassRadius  = grassRadius;
   bladeCount = static_cast<std::uint32_t>(grassDensity * 100.0f);
   std::memcpy(grassParamsMapping, &params, sizeof(GrassParams));
 }
@@ -137,4 +138,9 @@ void GrassRenderer::setGrassDensity(int density)
 void GrassRenderer::setGrassHeight(float height)
 {
   grassHeight = height;
+}
+
+void GrassRenderer::setGrassRadius(float radius)
+{
+  grassRadius = radius;
 }

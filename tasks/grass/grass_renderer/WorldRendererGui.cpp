@@ -128,12 +128,36 @@ void WorldRendererGui::drawTerrainTab()
 void WorldRendererGui::drawGrassTab()
 {
   ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Grass Parameters");
+  ImGui::Checkbox("Synchronize Density with Radius", &syncDensityRadius);
   float grassHeight = renderer_.grassRenderer->getGrassHeight();
   if (ImGui::SliderFloat("Grass Height", &grassHeight, 0.1f, 20.0f))
     renderer_.grassRenderer->setGrassHeight(grassHeight);
   int grassDensity = renderer_.grassRenderer->getGrassDensity();
-  if (ImGui::SliderInt("Grass Density", &grassDensity, 1, 100000))
+  if (ImGui::InputInt("Grass Density", &grassDensity, 1, 1000))
+  {
+    if (syncDensityRadius && oldGrassDensity > 0)
+    {
+      float ratio = sqrt(static_cast<float>(grassDensity) / oldGrassDensity);
+      float newRadius = renderer_.grassRenderer->getGrassRadius() * ratio;
+      renderer_.grassRenderer->setGrassRadius(newRadius);
+      oldGrassRadius = newRadius;
+    }
     renderer_.grassRenderer->setGrassDensity(grassDensity);
+    oldGrassDensity = grassDensity;
+  }
+  float grassRadius = renderer_.grassRenderer->getGrassRadius();
+  if (ImGui::SliderFloat("Grass Radius", &grassRadius, 10.0f, 1000.0f))
+  {
+    if (syncDensityRadius && oldGrassRadius > 0.0f)
+    {
+      float ratio = grassRadius / oldGrassRadius;
+      int newDensity = static_cast<int>(renderer_.grassRenderer->getGrassDensity() * ratio * ratio);
+      renderer_.grassRenderer->setGrassDensity(newDensity);
+      oldGrassDensity = newDensity;
+    }
+    renderer_.grassRenderer->setGrassRadius(grassRadius);
+    oldGrassRadius = grassRadius;
+  }
 }
 
 void WorldRendererGui::drawInfoTab() const

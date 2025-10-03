@@ -31,6 +31,12 @@ void main()
   vec3  bladePos    = blades.blades[bladeIndex].pos;
   float bladeHeight = blades.blades[bladeIndex].height;
 
+  if (bladeHeight == 0.0)
+  {
+    gl_Position = vec4(0.0, 0.0, 0.0, 0.0);
+    return;
+  }
+
   vec3 vertexPos = bladePos;
   if (vertexType == 1)
   {

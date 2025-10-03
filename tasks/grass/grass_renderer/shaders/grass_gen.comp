@@ -19,6 +19,7 @@ layout(std140, set = 0, binding = 2) uniform GrassParams {
   float terrainSize;
   float grassHeight;
   float grassDensity;
+  float grassRadius;
 } params;
 
 const vec3  centerCoordTerrain = vec3(0.0, 0.0, 0.0);
@@ -53,13 +54,31 @@ void main()
   uint index  = id.y * stride + id.x;
 
   uint totalBlades = uint(params.grassDensity * 100.0);
-  if (index >= totalBlades) return;
+  if (index >= totalBlades) {
+    blades.blades[index].pos = vec3(0.0, -1000.0, 0.0);
+    blades.blades[index].height = 0.0;
+    return;
+  }
 
   uint gridSize = uint(ceil(sqrt(float(totalBlades))));
   uint gridX    = index % gridSize;
   uint gridY    = index / gridSize;
-  float spacing = params.terrainSize / max(float(gridSize) - 1.0, 1.0);
-  vec2 gridPos  = vec2(gridX, gridY) * spacing - params.terrainSize * 0.5;
+  float spacing = (params.grassRadius * 2.0) / max(float(gridSize) - 1.0, 1.0);
+  vec2 center   = params.eyePos.xz;
+  vec2 gridPos  = vec2(gridX, gridY) * spacing - params.grassRadius + center;
+
+  if (distance(gridPos, center) > params.grassRadius) {
+    blades.blades[index].pos = vec3(0.0, -1000.0, 0.0);
+    blades.blades[index].height = 0.0;
+    return;
+  }
+
+  if (gridPos.x < -params.terrainSize * 0.5 || gridPos.x > params.terrainSize * 0.5 ||
+      gridPos.y < -params.terrainSize * 0.5 || gridPos.y > params.terrainSize * 0.5) {
+    blades.blades[index].pos = vec3(0.0, -1000.0, 0.0);
+    blades.blades[index].height = 0.0;
+    return;
+  }
 
   vec2 texCoord = getTfM(gridPos);
   texCoord.y = 1.0 - texCoord.y;

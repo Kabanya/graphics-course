@@ -17,4 +17,7 @@ public:
 
 private:
   WorldRenderer& renderer_;
+  bool  syncDensityRadius = true;
+  float oldGrassRadius = 100.0f;
+  int   oldGrassDensity = 100;
 };
