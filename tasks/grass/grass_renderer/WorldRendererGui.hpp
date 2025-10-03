@@ -11,6 +11,7 @@ public:
   void drawPerformanceTab() const;
   void drawRenderTab();
   void drawTerrainTab();
+  void drawGrassTab();
   // void drawParticlesTab();
   void drawInfoTab() const;
 

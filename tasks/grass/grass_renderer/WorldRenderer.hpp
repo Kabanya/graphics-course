@@ -10,6 +10,7 @@
 #include <memory>
 
 #include "TerrainRenderer.hpp"
+#include "GrassRenderer.hpp"
 
 #include "WorldRendererGui.hpp"
 #include "shaders/UniformParams.h"
@@ -68,6 +69,7 @@ private:
   std::unique_ptr<WorldRendererGui> gui;
   std::unique_ptr<QuadRenderer>     quadRenderer;
   std::unique_ptr<TerrainRenderer>  terrainRenderer;
+  std::unique_ptr<GrassRenderer>    grassRenderer;
 
   // Pipelines
   etna::GraphicsPipeline staticMeshPipeline{};
@@ -123,6 +125,7 @@ private:
   bool enableTessellation      = true;
   bool enableTerrainRendering  = true;
   bool enableSceneRendering    = true;
+  bool enableGrassRendering    = true;
   bool enableParticleRendering = true;
 
   // UI toggles

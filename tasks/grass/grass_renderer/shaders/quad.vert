@@ -3,7 +3,8 @@
 
 layout(location = 0) out uint InstanceIndex;
 
-void main() {
+void main()
+{
   InstanceIndex = gl_InstanceIndex;
 
   vec2 xy = gl_VertexIndex == 0 ? vec2(-1, -300) : (gl_VertexIndex == 1 ? vec2(3, -1) : vec2(-1, 3));

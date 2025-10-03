@@ -10,11 +10,14 @@ TerrainRenderer::TerrainRenderer()
   groupCountY = (terrainTextureSizeHeight + computeWorkgroupSize - 1) / computeWorkgroupSize;
 }
 
-void TerrainRenderer::allocateResources(etna::Buffer& constants, etna::Buffer& uniform_params_buffer, etna::Sampler& default_sampler)
+void TerrainRenderer::allocateResources(
+  etna::Buffer&  in_constants, 
+  etna::Buffer&  in_uniform_params_buffer,  
+  etna::Sampler& in_default_sampler)
 {
-  this->constants = &constants;
-  this->uniform_params_buffer = &uniform_params_buffer;
-  this->default_sampler = &default_sampler;
+  this->constants             = &in_constants;
+  this->uniform_params_buffer = &in_uniform_params_buffer;
+  this->default_sampler       = &in_default_sampler;
 
   auto& ctx = etna::get_context();
 

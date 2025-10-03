@@ -37,6 +37,12 @@ void WorldRendererGui::drawGui()
           ImGui::EndTabItem();
         }
 
+        if (ImGui::BeginTabItem("Grass"))
+        {
+          drawGrassTab();
+          ImGui::EndTabItem();
+        }
+
         if (ImGui::BeginTabItem("Info"))
         {
           drawInfoTab();
@@ -56,6 +62,7 @@ void WorldRendererGui::drawPerformanceTab() const
     1000.0f / ImGui::GetIO().Framerate,
     ImGui::GetIO().Framerate);
   ImGui::Text("Rendered Instances: %u", renderer_.renderedInstances);
+  ImGui::Text("Grass Blades: %u", renderer_.grassRenderer->getBladeCount());
 }
 
 void WorldRendererGui::drawRenderTab()
@@ -68,13 +75,7 @@ void WorldRendererGui::drawRenderTab()
   ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Rendering Options");
   ImGui::Checkbox   ("Enable Avocados Rendering", &renderer_.enableSceneRendering);
   ImGui::Checkbox   ("Enable Terrain Rendering", &renderer_.enableTerrainRendering);
-
-  ImGui::Separator();
-  ImGui::Text("Camera Speed");
-  int currentSpeed = static_cast<int>(renderer_.cameraSpeedLevel);
-  const char* speedItems[] = { "Slow", "Middle", "Fast" };
-  if (ImGui::Combo("##CameraSpeed", &currentSpeed, speedItems, IM_ARRAYSIZE(speedItems)))
-    renderer_.cameraSpeedLevel = static_cast<CameraSpeedLevel>(currentSpeed);
+  ImGui::Checkbox   ("Enable Grass Rendering", &renderer_.enableGrassRendering);
 }
 
 void WorldRendererGui::drawTerrainTab()
@@ -124,6 +125,17 @@ void WorldRendererGui::drawTerrainTab()
     renderer_.regenerateTerrain();
 }
 
+void WorldRendererGui::drawGrassTab()
+{
+  ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Grass Parameters");
+  float grassHeight = renderer_.grassRenderer->getGrassHeight();
+  if (ImGui::SliderFloat("Grass Height", &grassHeight, 0.1f, 20.0f))
+    renderer_.grassRenderer->setGrassHeight(grassHeight);
+  int grassDensity = renderer_.grassRenderer->getGrassDensity();
+  if (ImGui::SliderInt("Grass Density", &grassDensity, 1, 100000))
+    renderer_.grassRenderer->setGrassDensity(grassDensity);
+}
+
 void WorldRendererGui::drawInfoTab() const
 {
   ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Press 'B' to recompile and reload shaders");
@@ -135,6 +147,7 @@ void WorldRendererGui::drawInfoTab() const
   ImGui::BulletText("2: Toggle Tessellation");
   ImGui::BulletText("3: Toggle Avocados Rendering");
   ImGui::BulletText("4: Toggle Terrain Rendering");
+  ImGui::BulletText("5: Toggle Grass Rendering");
   ImGui::BulletText("Z: Toggle GUI tabs");
   ImGui::BulletText("Q: Toggle Debug Terrain Quad");
   ImGui::BulletText("WASD: Move camera");

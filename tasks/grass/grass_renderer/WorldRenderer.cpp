@@ -12,8 +12,10 @@
 WorldRenderer::WorldRenderer()
   : sceneMgr{std::make_unique<SceneManager>()},
     gui{std::make_unique<WorldRendererGui>(*this)},
-    terrainRenderer{std::make_unique<TerrainRenderer>()}
-{}
+    terrainRenderer{std::make_unique<TerrainRenderer>()},
+    grassRenderer{std::make_unique<GrassRenderer>()}
+{
+}
 
 void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
 {
@@ -60,6 +62,7 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
   persistentMapping = instanceMatricesBuffer.map();
 
   terrainRenderer->allocateResources(constants, uniform_params_buffer, default_sampler);
+  grassRenderer->allocateResources(constants, uniform_params_buffer, default_sampler, terrainRenderer->getPerlinTerrainImage(), static_cast<float>(terrainRenderer->getTerrainTextureSizeWidth()));
 }
 
 void WorldRenderer::loadScene(std::filesystem::path path)
@@ -94,6 +97,7 @@ void WorldRenderer::loadShaders()
     {GRASS_RENDERER_SHADERS_ROOT "static_mesh.frag.spv",
      GRASS_RENDERER_SHADERS_ROOT "static_mesh.vert.spv"});
   terrainRenderer->loadShaders();
+  grassRenderer->loadShaders();
 }
 
 void WorldRenderer::setupPipelines(vk::Format swapchain_format)
@@ -130,6 +134,7 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
         },
     });
   terrainRenderer->setupPipelines(swapchain_format);
+  grassRenderer->setupPipelines(swapchain_format);
 }
 
 bool WorldRenderer::isVisibleBoundingBox(const glm::vec3& min, const glm::vec3& max, const glm::mat4& mvp) const
@@ -178,6 +183,10 @@ void WorldRenderer::debugInput(const Keyboard& kb)
     enableTerrainRendering = !enableTerrainRendering;
     printf("Terrain Rendering: %s\n", enableTerrainRendering ? "ON" : "OFF");
   }
+  if (kb[KeyboardKey::k5] == ButtonState::Falling) {
+    enableGrassRendering = !enableGrassRendering;
+    printf("Grass Rendering: %s\n", enableGrassRendering ? "ON" : "OFF");
+  }
   if (kb[KeyboardKey::kZ] == ButtonState::Falling) {
     showTabs = !showTabs;
     printf("GUI tabs %s\n", showTabs ? "shown" : "hidden");
@@ -212,6 +221,7 @@ void WorldRenderer::update(const FramePacket& packet)
   constants.unmap();
 
   terrainRenderer->update(perlinParams);
+  grassRenderer->update(camView);
 
   auto instanceMeshes = sceneMgr->getInstanceMeshes();
   auto instanceMatricesData = sceneMgr->getInstanceMatrices();
@@ -275,8 +285,8 @@ void WorldRenderer::update(const FramePacket& packet)
 
   if (meshInstancePairs.empty())
     return;
-  uint32_t currentMesh = meshInstancePairs[0].first;
-  uint32_t groupStart = 0;
+  std::uint32_t currentMesh = meshInstancePairs[0].first;
+  std::uint32_t groupStart = 0;
 
   for (size_t i = 0; i < meshInstancePairs.size(); ++i)
   {
@@ -285,7 +295,7 @@ void WorldRenderer::update(const FramePacket& packet)
 
     if (meshIdx != currentMesh || i == meshInstancePairs.size() - 1)
     {
-      uint32_t groupSize = static_cast<uint32_t>(i) - groupStart;
+      std::uint32_t groupSize = static_cast<std::uint32_t>(i) - groupStart;
       if (meshIdx == currentMesh && i == meshInstancePairs.size() - 1)
         groupSize++;
 
@@ -298,14 +308,14 @@ void WorldRenderer::update(const FramePacket& packet)
       if (meshIdx != currentMesh)
       {
         currentMesh = meshIdx;
-        groupStart = static_cast<uint32_t>(i);
+        groupStart = static_cast<std::uint32_t>(i);
       }
     }
   }
 
   if (!instanceMatrices.empty() && (persistentMapping != nullptr))
   {
-    const size_t copySize = instanceMatrices.size() * sizeof(glm::mat4x4);
+    const std::size_t copySize = instanceMatrices.size() * sizeof(glm::mat4x4);
     std::memcpy(persistentMapping, instanceMatrices.data(), copySize);
   }
 }
@@ -359,7 +369,7 @@ void WorldRenderer::renderScene(
 
     for (size_t j = 0; j < relemCount; ++j)
     {
-      const uint64_t renderElemId = firstRelem + j;
+      const std::uint64_t renderElemId = firstRelem + j;
       if (renderElemId >= renderElements.size())
         continue;
 
@@ -381,6 +391,10 @@ void WorldRenderer::renderWorld(
   vk::CommandBuffer cmd_buf, vk::Image target_image, vk::ImageView target_image_view)
 {
   ETNA_PROFILE_GPU(cmd_buf, renderWorld);
+
+  // Generate grass blades outside render pass
+  if (enableGrassRendering)
+    grassRenderer->generateGrass(cmd_buf);
 
   {
     ETNA_PROFILE_GPU(cmd_buf, renderForward);
@@ -407,6 +421,19 @@ void WorldRenderer::renderWorld(
       {.image = mainViewDepth.get(), .view = mainViewDepth.getView({}), .loadOp = vk::AttachmentLoadOp::eLoad});
 
     terrainRenderer->render(cmd_buf);
+  }
+
+  // Render grass
+  if (enableGrassRendering)
+  {
+    ETNA_PROFILE_GPU(cmd_buf, renderGrass);
+    etna::RenderTargetState renderTargets(
+      cmd_buf,
+      {{0, 0}, {resolution.x, resolution.y}},
+      {{.image = target_image, .view = target_image_view, .loadOp = vk::AttachmentLoadOp::eLoad}},
+      {.image = mainViewDepth.get(), .view = mainViewDepth.getView({}), .loadOp = vk::AttachmentLoadOp::eLoad});
+
+    grassRenderer->render(cmd_buf);
   }
 
   if (drawDebugTerrainQuad)

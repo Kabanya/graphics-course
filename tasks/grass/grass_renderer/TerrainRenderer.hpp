@@ -17,7 +17,9 @@ public:
   explicit TerrainRenderer();
 
   void allocateResources(
-    etna::Buffer& constants, etna::Buffer& uniform_params_buffer, etna::Sampler& default_sampler);
+    etna::Buffer& in_constants,
+    etna::Buffer& in_uniform_params_buffer, 
+    etna::Sampler& in_default_sampler);
   void loadShaders();
   void setupPipelines(vk::Format swapchain_format);
   void update(const PerlinParams& params);

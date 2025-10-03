@@ -6,6 +6,7 @@ add_executable(grass_renderer
   WorldRenderer.cpp
   WorldRendererGui.cpp
   TerrainRenderer.cpp
+  GrassRenderer.cpp
 )
 
 target_link_libraries(grass_renderer
@@ -20,4 +21,7 @@ target_add_shaders(grass_renderer
   shaders/terrain.tese
   shaders/terrain.frag
   shaders/quad.vert
+  shaders/grass_gen.comp
+  shaders/grass.vert
+  shaders/grass.frag
 )
