@@ -90,8 +90,7 @@ void Emitter::update(float dt, glm::vec3 wind,
                      const etna::ComputePipeline& calculate_pipeline,
                      const etna::ComputePipeline& integrate_pipeline)
 {
-  // CPU update for spawn timing
-  timeSinceLastSpawn += dt;
+  // timeSinceLastSpawn += dt;
 
   auto& ctx = etna::get_context();
   auto cmdManager = ctx.createOneShotCmdMgr();
@@ -114,7 +113,7 @@ void Emitter::update(float dt, glm::vec3 wind,
     // Write emitter datta
     memcpy(emitterSSBOMapping, &gpuEmitter, sizeof(EmitterGPU));
 
-    uint32_t countData[2] = {currentParticleCount, maxParticlesPerEmitter};
+    std::uint32_t countData[2] = {currentParticleCount, maxParticlesPerEmitter};
     memcpy(particleCountMapping, countData, sizeof(countData));
 
     spawnData.deltaTime = dt;
@@ -185,11 +184,13 @@ void Emitter::update(float dt, glm::vec3 wind,
   ETNA_CHECK_VK_RESULT(cmdBuf.end());
   cmdManager->submitAndWait(cmdBuf);
 
-  // Readback particle count and emitter state
-  memcpy(&currentParticleCount, particleCountMapping, sizeof(uint32_t));
+  // Readback only the total particle slots allocated by spawn shader
+  // We use this as the upper bound for processing/sorting
+  memcpy(&currentParticleCount, particleCountMapping, sizeof(std::uint32_t));
   if (currentParticleCount > maxParticlesPerEmitter)
     currentParticleCount = maxParticlesPerEmitter;
 
+  // Readback emitter state for time tracking
   if (spawnFrequency > 0.0f)
   {
     EmitterGPU* readBackEmitter = static_cast<EmitterGPU*>(emitterSSBOMapping);

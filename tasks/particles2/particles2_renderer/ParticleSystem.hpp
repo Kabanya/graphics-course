@@ -8,12 +8,13 @@
 
 class ParticleSystem
 {
-  public:
+public:
   ParticleSystem() = default;
 
   void allocateResources();
   void setupPipelines();
-  void render(vk::CommandBuffer cmd_buf, glm::vec3 cam_pos);
+  void sortAllEmitters(vk::CommandBuffer cmd_buf, glm::vec3 cam_pos);
+  void render(vk::CommandBuffer cmd_buf);
 
   void update(float dt, const glm::vec3 wind_value);
 
@@ -23,14 +24,13 @@ class ParticleSystem
   void removeEmitter(std::size_t index);
   void clearAllEmitters();
 
-
-public:
   std::vector<Emitter> emitters;
   const std::vector<Emitter>& getEmitters() const {return emitters;}
 
   etna::ComputePipeline particleCalculatePipeline{};
   etna::ComputePipeline particleIntegratePipeline{};
   etna::ComputePipeline particleSpawnPipeline{};
+  etna::ComputePipeline particleSortPipeline{};
 
   void* particleSSBOMapping  = nullptr;
   void* emitterSSBOMapping   = nullptr;
@@ -64,4 +64,9 @@ public:
     uint32_t maxParticlesPerEmitter;
     uint32_t currentParticles;
   };
+private:
+  void sortEmitterParticles(
+    vk::CommandBuffer cmd_buf,
+    Emitter& emitter,
+    glm::vec3 cam_pos);
 };

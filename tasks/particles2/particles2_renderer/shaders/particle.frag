@@ -16,9 +16,13 @@ layout(std140, set = 0, binding = 2) uniform UniformParams
   vec3 particleColor;
 } uniformParams;
 
+layout(location = 0) in vec4 vel_in;
+
 layout(location = 0) out vec4 out_fragColor;
 
 void main()
 {
+  if (vel_in.w <= 0.0)
+    discard;
   out_fragColor = vec4(uniformParams.particleColor, uniformParams.particleAlpha);
 }

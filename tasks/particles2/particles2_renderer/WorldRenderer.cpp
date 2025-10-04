@@ -137,6 +137,7 @@ void WorldRenderer::loadShaders()
   etna::create_program("particle_calculate", {PARTICLES2_RENDERER_SHADERS_ROOT "particle_calculate.comp.spv"});
   etna::create_program("particle_integrate", {PARTICLES2_RENDERER_SHADERS_ROOT "particle_integrate.comp.spv"});
   etna::create_program("particle_spawn", {PARTICLES2_RENDERER_SHADERS_ROOT "particle_spawn.comp.spv"});
+  etna::create_program("particle_sort", {PARTICLES2_RENDERER_SHADERS_ROOT "particle_sort.comp.spv"});
 }
 
 void WorldRenderer::setupPipelines(vk::Format swapchain_format)
@@ -208,6 +209,10 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
               etna::VertexByteStreamFormatDescription::Attribute{
                 .format = vk::Format::eR32G32B32A32Sfloat,
                 .offset = 0,
+              },
+              etna::VertexByteStreamFormatDescription::Attribute{
+                .format = vk::Format::eR32G32B32A32Sfloat,
+                .offset = 16,
               },
             },
           },
@@ -542,6 +547,12 @@ void WorldRenderer::renderWorld(
   }
 
   if (enableParticleRendering) {
+    ETNA_PROFILE_GPU(cmd_buf, sortParticles);
+    particleSystem->sortAllEmitters(cmd_buf, camView);
+    etna::flush_barriers(cmd_buf);
+  }
+
+  if (enableParticleRendering) {
     etna::RenderTargetState renderTargets(
       cmd_buf,
       {{0, 0}, {resolution.x, resolution.y}},
@@ -562,7 +573,7 @@ void WorldRenderer::renderWorld(
         vk::PipelineBindPoint::eGraphics, particlePipeline.getVkPipelineLayout(), 0,
         {descSet.getVkSet()}, {});
     }
-    particleSystem->render(cmd_buf, camView);
+    particleSystem->render(cmd_buf);
   }
 
   if (drawDebugTerrainQuad)

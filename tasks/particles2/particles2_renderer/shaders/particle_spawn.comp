@@ -63,10 +63,10 @@ void main()
   float spawnInterval = 1.0 / emitter.spawnFrequency;
 
   uint particlesToSpawn = 0;
-  while (emitter.timeSinceLastSpawn >= spawnInterval && particlesToSpawn < 100)
+  if (emitter.timeSinceLastSpawn >= spawnInterval)
   {
     emitter.timeSinceLastSpawn -= spawnInterval;
-    particlesToSpawn++;
+    particlesToSpawn = 1;
   }
 
   if (particlesToSpawn > 0)
@@ -83,9 +83,11 @@ void main()
 
   emitters[emitterIdx].timeSinceLastSpawn = emitter.timeSinceLastSpawn;
 
-  // indirectDraw.vertexCount = particleCount;
-  atomicMax(indirectDraw.vertexCount, particleCount);
-  indirectDraw.instanceCount = 1;
-  indirectDraw.firstVertex   = 0;
-  indirectDraw.firstInstance = 0;
+  if (emitterIdx == 0)
+  {
+    indirectDraw.vertexCount = particleCount;
+    indirectDraw.instanceCount = 1;
+    indirectDraw.firstVertex   = 0;
+    indirectDraw.firstInstance = 0;
+  }
 }
