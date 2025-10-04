@@ -2,18 +2,20 @@
 
 #include <algorithm>
 
-void ParticleSystem::update(float dt, glm::vec3 wind)
+void ParticleSystem::update(float dt, glm::vec3 wind_value)
 {
   for (auto& emitter : emitters)
   {
-    emitter.update(dt, max_particlesPerEmitter, wind);
+    emitter.update(dt, max_particlesPerEmitter, wind_value);
   }
 }
 
 void ParticleSystem::render(vk::CommandBuffer cmd_buf, glm::vec3 cam_pos)
 {
-  std::sort(emitters.begin(), emitters.end(), [cam_pos](const Emitter& a, const Emitter& b) {
-    return glm::distance(a.position, cam_pos) > glm::distance(b.position, cam_pos);
+  std::ranges::sort(
+    emitters,
+    [cam_pos](const Emitter& a, const Emitter& b) {
+      return glm::distance(a.position, cam_pos) > glm::distance(b.position, cam_pos);
   });
 
   void* mapping = particleBuffer.map();
@@ -25,9 +27,11 @@ void ParticleSystem::render(vk::CommandBuffer cmd_buf, glm::vec3 cam_pos)
     if (emitter.particles.empty())
       continue;
 
-    std::sort(emitter.particles.begin(), emitter.particles.end(), [cam_pos](const Particle& a, const Particle& b) {
-      return glm::distance(a.position, cam_pos) > glm::distance(b.position, cam_pos);
-    });
+    std::ranges::sort(
+      emitter.particles,
+      [cam_pos](const Particle& a, const Particle& b) {
+        return glm::distance(a.position, cam_pos) > glm::distance(b.position, cam_pos);
+      });
 
     for (const auto& particle : emitter.particles)
     {

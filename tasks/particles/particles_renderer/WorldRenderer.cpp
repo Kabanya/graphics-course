@@ -122,17 +122,17 @@ void WorldRenderer::loadShaders()
 {
   etna::create_program(
     "static_mesh_material",
-    {IMGUI_TERRAIN_RENDERER_SHADERS_ROOT "static_mesh.frag.spv",
-     IMGUI_TERRAIN_RENDERER_SHADERS_ROOT "static_mesh.vert.spv"});
-  etna::create_program("perlin_terrain", {IMGUI_TERRAIN_RENDERER_SHADERS_ROOT "terrain_perlin.comp.spv"});
-  etna::create_program("normal_map_generation", {IMGUI_TERRAIN_RENDERER_SHADERS_ROOT "terrain_normal.comp.spv"});
+    {PARTICLES_TERRAIN_RENDERER_SHADERS_ROOT "static_mesh.frag.spv",
+     PARTICLES_TERRAIN_RENDERER_SHADERS_ROOT "static_mesh.vert.spv"});
+  etna::create_program("perlin_terrain", {PARTICLES_TERRAIN_RENDERER_SHADERS_ROOT "terrain_perlin.comp.spv"});
+  etna::create_program("normal_map_generation", {PARTICLES_TERRAIN_RENDERER_SHADERS_ROOT "terrain_normal.comp.spv"});
   etna::create_program(
     "terrain_render",
-    {IMGUI_TERRAIN_RENDERER_SHADERS_ROOT "quad.vert.spv",
-     IMGUI_TERRAIN_RENDERER_SHADERS_ROOT "terrain.tesc.spv",
-     IMGUI_TERRAIN_RENDERER_SHADERS_ROOT "terrain.tese.spv",
-     IMGUI_TERRAIN_RENDERER_SHADERS_ROOT "terrain.frag.spv"});
-  etna::create_program("particle_render", {IMGUI_TERRAIN_RENDERER_SHADERS_ROOT "particle.frag.spv", IMGUI_TERRAIN_RENDERER_SHADERS_ROOT "particle.vert.spv"});
+    {PARTICLES_TERRAIN_RENDERER_SHADERS_ROOT "terrain.vert.spv",
+     PARTICLES_TERRAIN_RENDERER_SHADERS_ROOT "terrain.tesc.spv",
+     PARTICLES_TERRAIN_RENDERER_SHADERS_ROOT "terrain.tese.spv",
+     PARTICLES_TERRAIN_RENDERER_SHADERS_ROOT "terrain.frag.spv"});
+  etna::create_program("particle_render", {PARTICLES_TERRAIN_RENDERER_SHADERS_ROOT "particle.frag.spv", PARTICLES_TERRAIN_RENDERER_SHADERS_ROOT "particle.vert.spv"});
 }
 
 void WorldRenderer::setupPipelines(vk::Format swapchain_format)
@@ -321,8 +321,8 @@ void WorldRenderer::update(const FramePacket& packet)
 
   totalParticles = 0;
   for (const auto& emitter : particleSystem->emitters)
-    totalParticles += emitter.particles.size();
-  while (totalParticles >= nextMilestone && fpsMilestones.find(nextMilestone) == fpsMilestones.end())
+    totalParticles += static_cast<std::uint32_t>(emitter.particles.size());
+  while (totalParticles >= nextMilestone && !fpsMilestones.contains(nextMilestone))
   {
     fpsMilestones[nextMilestone] = ImGui::GetIO().Framerate;
     nextMilestone += 5000;

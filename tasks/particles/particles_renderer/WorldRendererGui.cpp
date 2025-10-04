@@ -3,6 +3,7 @@
 #include "WorldRenderer.hpp"
 
 #include <imgui.h>
+#include <random>
 
 WorldRendererGui::WorldRendererGui(WorldRenderer& renderer) : renderer_(renderer) {}
 
@@ -170,6 +171,28 @@ void WorldRendererGui::drawParticlesTab()
   if (ImGui::Button("Clear All Emitters"))
   {
     renderer_.particleSystem->emitters.clear();
+  }
+
+  if (ImGui::Button("Randomize All Emitters"))
+  {
+    std::mt19937 gen(std::random_device{}());
+    std::uniform_real_distribution<float> posDist (-10.0f, 10.0f);
+    std::uniform_real_distribution<float> freDist (1.0f,   500.0f);
+    std::uniform_real_distribution<float> lifDist (0.1f,   25.0f);
+    std::uniform_real_distribution<float> velDist (-15.0f, 15.0f);
+    std::uniform_real_distribution<float> gravDist(-2.0f,  2.0f);
+    std::uniform_real_distribution<float> dragDist(0.0f,   1.0f);
+    std::uniform_real_distribution<float> sizeDist(1.0f,   12.5f);
+    for (auto& emitter : renderer_.particleSystem->emitters)
+    {
+      emitter.position         = {posDist(gen), posDist(gen), posDist(gen)};
+      emitter.spawnFrequency   = freDist(gen);
+      emitter.particleLifetime = lifDist(gen);
+      emitter.initialVelocity  = {velDist(gen), velDist(gen), velDist(gen)};
+      emitter.gravity          = {gravDist(gen), gravDist(gen), gravDist(gen)};
+      emitter.drag             = dragDist(gen);
+      emitter.size             = sizeDist(gen);
+    }
   }
 
   std::vector<size_t> emittersToRemove;

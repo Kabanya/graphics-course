@@ -13,7 +13,7 @@ public:
   ParticleSystem()  = default;
   ~ParticleSystem() = default;
 
-  void update(float dt, glm::vec3 wind);
+  void update(float dt, glm::vec3 wind_value);
   void render(vk::CommandBuffer cmd_buf, glm::vec3 cam_pos);
   void addEmitter(const Emitter& emitter);
   void removeEmitter(size_t index);
