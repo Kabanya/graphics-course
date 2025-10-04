@@ -114,7 +114,7 @@ private:
     .time = {},
     .baseColor = {0.9f, 0.92f, 1.0f},
     .windStrength = 2.0f,
-    .windSpeed = 5.0f,
+    .windSpeed = 2.0f,
     .enableDynamicWind = 1.0f,
   };
 

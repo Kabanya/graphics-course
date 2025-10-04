@@ -72,7 +72,7 @@ private:
   // Parameters
   int   grassDensity = 400;
   float grassHeight  = 5.0f;
-  float grassRadius  = 200.0f;
+  float grassRadius  = 100.0f;
   float grassWidth   = 0.1f;
   float terrain_size = TerrainRenderer::TERRAIN_GRID_SIZE;
 
@@ -82,5 +82,5 @@ private:
   // Compute workgroup sizes
   std::uint32_t groupCountX = 4;
   std::uint32_t groupCountY = 4;
-  std::uint32_t MAX_BLADES = grassDensity * 100'000;
+  std::uint32_t MAX_BLADES = grassDensity * 10'000;
 };

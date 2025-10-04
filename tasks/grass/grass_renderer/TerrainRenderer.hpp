@@ -17,8 +17,8 @@ public:
   explicit TerrainRenderer();
 
   void allocateResources(
-    etna::Buffer& in_constants,
-    etna::Buffer& in_uniform_params_buffer, 
+    etna::Buffer&  in_constants,
+    etna::Buffer&  in_uniform_params_buffer,
     etna::Sampler& in_default_sampler);
   void loadShaders();
   void setupPipelines(vk::Format swapchain_format);
@@ -91,11 +91,11 @@ private:
   };
 
   PerlinParams windParams{
-    .octaves = 5u,
-    .amplitude = 0.5f,
-    .frequencyMultiplier = 2.0f,
-    .scale = 4.0f,
-    .time = 0.0f,
+    .octaves = 2u,
+    .amplitude = 0.25f,
+    .frequencyMultiplier = 1.5f,
+    .scale = 2.0f,
+    .time = 5.0f,
   };
 
   // References to shared buffers

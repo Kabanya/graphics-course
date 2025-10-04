@@ -17,6 +17,7 @@ target_add_shaders(grass_renderer
   shaders/static_mesh.vert
   shaders/terrain_normal.comp
   shaders/terrain_perlin.comp
+  shaders/terrain.vert
   shaders/terrain.tesc
   shaders/terrain.tese
   shaders/terrain.frag

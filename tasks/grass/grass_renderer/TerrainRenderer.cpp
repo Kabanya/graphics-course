@@ -77,7 +77,7 @@ void TerrainRenderer::loadShaders()
   etna::create_program("wind_perlin", {GRASS_RENDERER_SHADERS_ROOT "wind_perlin.comp.spv"});
   etna::create_program(
     "terrain_render",
-    {GRASS_RENDERER_SHADERS_ROOT "quad.vert.spv",
+    {GRASS_RENDERER_SHADERS_ROOT "terrain.vert.spv",
      GRASS_RENDERER_SHADERS_ROOT "terrain.tesc.spv",
      GRASS_RENDERER_SHADERS_ROOT "terrain.tese.spv",
      GRASS_RENDERER_SHADERS_ROOT "terrain.frag.spv"});
@@ -87,9 +87,9 @@ void TerrainRenderer::setupPipelines(vk::Format swapchain_format)
 {
   auto& pipelineManager = etna::get_context().getPipelineManager();
 
-  perlinPipeline = pipelineManager.createComputePipeline("perlin_terrain", {});
-  normalPipeline = pipelineManager.createComputePipeline("normal_map_generation", {});
-  windPipeline = pipelineManager.createComputePipeline("wind_perlin", {});
+  perlinPipeline  = pipelineManager.createComputePipeline("perlin_terrain", {});
+  normalPipeline  = pipelineManager.createComputePipeline("normal_map_generation", {});
+  windPipeline    = pipelineManager.createComputePipeline("wind_perlin", {});
   terrainPipeline = pipelineManager.createGraphicsPipeline(
     "terrain_render",
     etna::GraphicsPipeline::CreateInfo{
@@ -102,11 +102,12 @@ void TerrainRenderer::setupPipelines(vk::Format swapchain_format)
           .lineWidth = 1.f,
         },
       .fragmentShaderOutput =
-        {
-          .colorAttachmentFormats = {swapchain_format},
-          .depthAttachmentFormat = vk::Format::eD32Sfloat,
-        },
-    });
+      {
+        .colorAttachmentFormats = {swapchain_format},
+        .depthAttachmentFormat = vk::Format::eD32Sfloat,
+      },
+    }
+  );
 }
 
 void TerrainRenderer::update(const PerlinParams& params)
