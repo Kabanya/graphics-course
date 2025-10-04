@@ -9,7 +9,7 @@ struct Particle
 
 layout(std140, binding = 0) buffer Pos
 {
-   Particle particles[ ];
+  Particle particles[ ];
 };
 
 layout (binding = 1) uniform UBO
@@ -60,6 +60,7 @@ void main()
 		{
 			vec4 other = sharedData[j];
 			vec3 len = other.xyz - position.xyz;
+      float mass = other.w;
 			acceleration.xyz += GRAVITY * len * other.w / pow(dot(len, len) + SOFTEN, POWER);
 		}
 

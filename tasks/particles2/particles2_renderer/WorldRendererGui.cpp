@@ -173,7 +173,7 @@ void WorldRendererGui::drawParticlesTab()
   {
     renderer_.particleSystem->clearAllEmitters();
     renderer_.fpsMilestones.clear();
-    renderer_.nextMilestone = 5000;
+    renderer_.nextMilestone = 20'000;
   }
 
   std::vector<size_t> emittersToRemove;

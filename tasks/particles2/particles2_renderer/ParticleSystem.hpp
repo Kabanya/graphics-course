@@ -25,15 +25,15 @@ class ParticleSystem
 
 
 public:
-    std::vector<Emitter> emitters;
-    const std::vector<Emitter>& getEmitters() const {return emitters;}
+  std::vector<Emitter> emitters;
+  const std::vector<Emitter>& getEmitters() const {return emitters;}
 
   etna::ComputePipeline particleCalculatePipeline{};
   etna::ComputePipeline particleIntegratePipeline{};
   etna::ComputePipeline particleSpawnPipeline{};
 
-  void* particleSSBOMapping = nullptr;
-  void* emitterSSBOMapping = nullptr;
+  void* particleSSBOMapping  = nullptr;
+  void* emitterSSBOMapping   = nullptr;
   void* particleCountMapping = nullptr;
 
   std::uint32_t const maxParticlesPerEmitter = 5'000'000;

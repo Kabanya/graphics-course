@@ -83,8 +83,9 @@ void main()
 
   emitters[emitterIdx].timeSinceLastSpawn = emitter.timeSinceLastSpawn;
 
-  indirectDraw.vertexCount = particleCount;
+  // indirectDraw.vertexCount = particleCount;
+  atomicMax(indirectDraw.vertexCount, particleCount);
   indirectDraw.instanceCount = 1;
-  indirectDraw.firstVertex = 0;
+  indirectDraw.firstVertex   = 0;
   indirectDraw.firstInstance = 0;
 }

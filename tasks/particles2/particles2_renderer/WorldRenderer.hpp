@@ -157,7 +157,7 @@ private:
   std::uint32_t renderedInstances = 0;
 
   std::size_t totalParticles  = 0;
-  std::uint32_t nextMilestone = 5000;
+  std::uint32_t nextMilestone = 20'000;
   std::map<std::uint32_t, float> fpsMilestones;
   std::vector<size_t> emittersToRemove;
   std::uint32_t currentParticleCount = 0;

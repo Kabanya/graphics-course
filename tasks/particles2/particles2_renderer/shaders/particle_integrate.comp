@@ -33,6 +33,6 @@ void main()
 		return;
 	vec4 position = particles[index].pos;
 	vec4 velocity = particles[index].vel;
-	position += ubo.deltaT * TIME_FACTOR * velocity;
+	position.xyz += ubo.deltaT * TIME_FACTOR * velocity.xyz;
 	particles[index].pos = position;
 }

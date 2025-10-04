@@ -4,21 +4,26 @@
 #include "etna/Etna.hpp"
 #include "etna/OneShotCmdMgr.hpp"
 #include "etna/Profiling.hpp"
-// #include "shaders/UniformParams.h"
+#include "shaders/UniformParams.h"
 
-void Emitter::spawnParticle()
-{
-  Particle p;
-  p.position = position;
-  p.velocity = initialVelocity;
-  p.remainingLifetime = particleLifetime;
-  p.size = size;
-  particles.push_back(p);
-}
+// [[deprecated("Use shader for spawning particles instead")]]
+// void Emitter::spawnParticle()
+// {
+//   printf("Use shader for spawning particles instead");
+//   // ParticleGPU p;
+//   // p.pos = glm::vec4(position, size);
+//   // p.vel = glm::vec4(initialVelocity, particleLifetime);
+//   // particles.push_back(p);
+// }
 
 void Emitter::clearParticles()
 {
-  particles.clear();
+  std::uint32_t zero = 0;
+  memcpy(particleCountMapping, &zero, sizeof(std::uint32_t));
+  currentParticleCount = 0;
+  VkDrawIndirectCommand resetDraw = {0, 1, 0, 0};
+  memcpy(indirectDrawBuffer.map(), &resetDraw, sizeof(VkDrawIndirectCommand));
+  indirectDrawBuffer.unmap();
 }
 
 void Emitter::allocateGPUResources()
@@ -26,7 +31,7 @@ void Emitter::allocateGPUResources()
   auto& ctx = etna::get_context();
 
   particleSSBO = ctx.createBuffer(etna::Buffer::CreateInfo{
-    .size = maxParticlesPerEmitter * sizeof(Particle),
+    .size = maxParticlesPerEmitter * sizeof(ParticleGPU),
     .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eVertexBuffer,
     .memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU,
     .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
@@ -96,26 +101,15 @@ void Emitter::update(float dt, glm::vec3 wind,
   // Spawn particles on GPU
   if (spawnFrequency > 0.0f)
   {
-    struct EmitterGPU {
-      glm::vec3 position;
-      float timeSinceLastSpawn;
-      glm::vec3 initialVelocity;
-      float spawnFrequency;
-      float particleLifetime;
-      float size;
-      uint32_t maxParticlesPerEmitter;
-      uint32_t currentParticles;
-    };
-
     EmitterGPU gpuEmitter;
-    gpuEmitter.position = position;
-    gpuEmitter.timeSinceLastSpawn = timeSinceLastSpawn;
-    gpuEmitter.initialVelocity = initialVelocity;
-    gpuEmitter.spawnFrequency = spawnFrequency;
-    gpuEmitter.particleLifetime = particleLifetime;
-    gpuEmitter.size = size;
+    gpuEmitter.position               = position;
+    gpuEmitter.timeSinceLastSpawn     = timeSinceLastSpawn;
+    gpuEmitter.initialVelocity        = initialVelocity;
+    gpuEmitter.spawnFrequency         = spawnFrequency;
+    gpuEmitter.particleLifetime       = particleLifetime;
+    gpuEmitter.size                   = size;
     gpuEmitter.maxParticlesPerEmitter = maxParticlesPerEmitter;
-    gpuEmitter.currentParticles = 0;
+    gpuEmitter.currentParticles       = 0;
 
     // Write emitter datta
     memcpy(emitterSSBOMapping, &gpuEmitter, sizeof(EmitterGPU));
@@ -201,5 +195,5 @@ void Emitter::update(float dt, glm::vec3 wind,
     EmitterGPU* readBackEmitter = static_cast<EmitterGPU*>(emitterSSBOMapping);
     timeSinceLastSpawn = readBackEmitter->timeSinceLastSpawn;
   }
-  particles.clear();
+  // particles.clear();
 }

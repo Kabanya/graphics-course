@@ -1,7 +1,6 @@
 #pragma once
 
-#include "Particle.hpp"
-
+#include "shaders/UniformParams.h"
 #include <vector>
 #include <glm/glm.hpp>
 #include <etna/Buffer.hpp>
@@ -19,7 +18,8 @@ public:
   float size;
   float timeSinceLastSpawn = 0.0f;
 
-  std::vector<Particle> particles;
+  // [[deprecated("Use GPU-based particle system instead")]]
+  std::vector<ParticleGPU> particles;
 
   etna::Buffer particleSSBO;
   etna::Buffer particleUBO;
@@ -39,7 +39,6 @@ public:
               const etna::ComputePipeline& spawn_pipeline,
               const etna::ComputePipeline& calculate_pipeline,
               const etna::ComputePipeline& integrate_pipeline);
-  void spawnParticle();
   void clearParticles();
   void allocateGPUResources();
 

@@ -27,8 +27,8 @@ public:
 
   void debugInput(const Keyboard& kb);
   void update(const FramePacket& packet);
-  float getCameraSpeed() const { return worldRenderer->getCameraSpeed(); }
   void drawFrame();
+  float getCameraSpeed() const { return worldRenderer->getCameraSpeed(); }
 
 private:
   ResolutionProvider resolutionProvider;
