@@ -15,7 +15,7 @@
 // of a certain pipeline with specific bindings (including material data)
 struct RenderElement
 {
-  std::uint32_t vertexOffset;
+  std::int32_t vertexOffset;
   std::uint32_t indexOffset;
   std::uint32_t indexCount;
   // Not implemented!

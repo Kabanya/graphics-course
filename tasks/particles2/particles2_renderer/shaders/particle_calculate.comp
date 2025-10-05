@@ -1,0 +1,78 @@
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+
+struct Particle
+{
+	vec4 pos;
+	vec4 vel;
+};
+
+layout(std140, binding = 0) buffer Pos
+{
+  Particle particles[ ];
+};
+
+layout (binding = 1) uniform UBO
+{
+	float deltaT;
+	uint particleCount;
+	vec3 gravity;
+	vec3 wind;
+	float drag;
+} ubo;
+
+layout (constant_id = 1) const int SHARED_DATA_SIZE = 1024;
+layout (constant_id = 2) const float GRAVITY = 0.0;
+layout (constant_id = 3) const float POWER = 0.75;
+layout (constant_id = 4) const float SOFTEN = 0.05;
+
+layout (local_size_x = 32) in;
+
+shared vec4 sharedData[SHARED_DATA_SIZE];
+
+#define TIME_FACTOR 1.0
+
+void main()
+{
+	// SSBO index
+	uint index = gl_GlobalInvocationID.x;
+	if (index >= ubo.particleCount)
+		return;
+
+	vec4 position = particles[index].pos;
+	vec4 velocity = particles[index].vel;
+	vec4 acceleration = vec4(0.0);
+
+	for (int i = 0; i < ubo.particleCount; i += SHARED_DATA_SIZE)
+	{
+		if (i + gl_LocalInvocationID.x < ubo.particleCount)
+		{
+			sharedData[gl_LocalInvocationID.x] = particles[i + gl_LocalInvocationID.x].pos;
+		}
+		else
+		{
+			sharedData[gl_LocalInvocationID.x] = vec4(0.0);
+		}
+
+		barrier();
+
+		for (int j = 0; j < gl_WorkGroupSize.x; j++)
+		{
+			vec4 other = sharedData[j];
+			vec3 len = other.xyz - position.xyz;
+      float mass = other.w;
+			acceleration.xyz += GRAVITY * len * other.w / pow(dot(len, len) + SOFTEN, POWER);
+		}
+
+		barrier();
+	}
+
+	acceleration.xyz += ubo.gravity + ubo.wind;
+
+	particles[index].vel.xyz += ubo.deltaT * TIME_FACTOR * acceleration.xyz;
+	particles[index].vel.xyz -= ubo.drag * particles[index].vel.xyz * ubo.deltaT * TIME_FACTOR;
+
+	particles[index].vel.w -= ubo.deltaT;
+	if (particles[index].vel.w < 0.0)
+		particles[index].vel.w = 0.0;
+}

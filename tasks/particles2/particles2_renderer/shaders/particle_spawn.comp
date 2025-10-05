@@ -1,0 +1,93 @@
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+
+struct Particle
+{
+  vec4 pos;
+  vec4 vel;
+};
+
+struct Emitter
+{
+  vec3 position;
+  float timeSinceLastSpawn;
+  vec3 initialVelocity;
+  float spawnFrequency;
+  float particleLifetime;
+  float size;
+  uint maxParticlesPerEmitter;
+  uint currentParticles;
+};
+
+layout(std140, binding = 0) buffer Particles
+{
+  Particle particles[];
+};
+
+layout(std140, binding = 1) buffer Emitters
+{
+  Emitter emitters[];
+};
+
+layout(std140, binding = 2) buffer ParticleCount
+{
+  uint particleCount;
+  uint maxParticlesPerEmitter;
+};
+
+layout(std140, binding = 4) buffer IndirectDraw
+{
+  uint vertexCount;
+  uint instanceCount;
+  uint firstVertex;
+  uint firstInstance;
+} indirectDraw;
+
+layout(binding = 3) uniform SpawnUBO
+{
+  float deltaTime;
+  uint emitterCount;
+} ubo;
+
+layout (local_size_x = 32) in;
+
+void main()
+{
+  uint emitterIdx = gl_GlobalInvocationID.x;
+  if (emitterIdx >= ubo.emitterCount)
+    return;
+
+  Emitter emitter = emitters[emitterIdx];
+
+  emitter.timeSinceLastSpawn += ubo.deltaTime;
+  float spawnInterval = 1.0 / emitter.spawnFrequency;
+
+  uint particlesToSpawn = 0;
+  if (emitter.timeSinceLastSpawn >= spawnInterval)
+  {
+    emitter.timeSinceLastSpawn -= spawnInterval;
+    particlesToSpawn = 1;
+  }
+
+  if (particlesToSpawn > 0)
+  {
+    uint startIdx = atomicAdd(particleCount, particlesToSpawn);
+
+    for (uint i = 0; i < particlesToSpawn && (startIdx + i) < maxParticlesPerEmitter; i++)
+    {
+      uint idx = startIdx + i;
+      particles[idx].pos = vec4(emitter.position, emitter.size);
+      particles[idx].vel = vec4(emitter.initialVelocity, emitter.particleLifetime);
+    }
+  }
+
+  emitters[emitterIdx].timeSinceLastSpawn = emitter.timeSinceLastSpawn;
+
+  if (emitterIdx == 0)
+  {
+    indirectDraw.vertexCount = particleCount;
+    indirectDraw.instanceCount = 1;
+    indirectDraw.firstVertex   = 0;
+    indirectDraw.firstInstance = 0;
+  }
+}
