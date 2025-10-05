@@ -4,7 +4,7 @@
 layout(location = 0) in vec4 pos;
 layout(location = 1) in vec4 vel;
 
-layout(std140, set = 0, binding = 1) uniform Constants
+layout(std140, set = 0, binding = 0) uniform Constants
 {
   mat4 viewProj;
 } constants;

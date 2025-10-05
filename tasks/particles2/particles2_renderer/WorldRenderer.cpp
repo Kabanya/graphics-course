@@ -566,8 +566,8 @@ void WorldRenderer::renderWorld(
         shaderInfo.getDescriptorLayoutId(0),
         cmd_buf,
         {
-          etna::Binding{1, constants.genBinding()},
-          etna::Binding{2, uniformParamsBuffer.genBinding()},
+          etna::Binding{0, constants.genBinding()},
+          etna::Binding{1, uniformParamsBuffer.genBinding()},
         });
       cmd_buf.bindDescriptorSets(
         vk::PipelineBindPoint::eGraphics, particlePipeline.getVkPipelineLayout(), 0,

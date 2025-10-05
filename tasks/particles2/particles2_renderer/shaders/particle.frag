@@ -1,12 +1,12 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
 
-layout(std140, set = 0, binding = 1) uniform Constants
+layout(std140, set = 0, binding = 0) uniform Constants
 {
   mat4 viewProj;
 } constants;
 
-layout(std140, set = 0, binding = 2) uniform UniformParams
+layout(std140, set = 0, binding = 1) uniform UniformParams
 {
   mat4 lightMatrix;
   vec3 lightPos;
