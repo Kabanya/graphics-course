@@ -1,0 +1,71 @@
+#version 450
+
+layout(local_size_x = 32, local_size_y = 32) in;
+layout(binding = 0, rg32f) restrict writeonly uniform image2D resultImage;
+layout(binding = 1, std430) restrict readonly buffer WindParamsBuffer {
+  int octaves;
+  float amplitude;
+  float frequencyMultiplier;
+  float scale;
+  float time;
+} windParams;
+
+vec2 hash22(vec2 p) {
+  p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
+  return -1.0 + 2.0 * fract(sin(p) * 43758.5453123);
+}
+
+vec2 quintic(vec2 t) {
+  return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
+}
+
+float gradientNoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+
+  vec2 g00 = hash22(i + vec2(0.0, 0.0));
+  vec2 g10 = hash22(i + vec2(1.0, 0.0));
+  vec2 g01 = hash22(i + vec2(0.0, 1.0));
+  vec2 g11 = hash22(i + vec2(1.0, 1.0));
+
+  float n00 = dot(g00, f - vec2(0.0, 0.0));
+  float n10 = dot(g10, f - vec2(1.0, 0.0));
+  float n01 = dot(g01, f - vec2(0.0, 1.0));
+  float n11 = dot(g11, f - vec2(1.0, 1.0));
+
+  vec2 u = quintic(f);
+
+  return mix(mix(n00, n10, u.x), mix(n01, n11, u.x), u.y);
+}
+
+float fbm(vec2 p) {
+  float value = 0.0;
+  float amplitude = windParams.amplitude;
+  float frequency = 1.0;
+  float maxValue = 0.0;
+
+  for (int i = 0; i < windParams.octaves; i++) {
+    value += amplitude * gradientNoise(p * frequency);
+    maxValue += amplitude;
+    amplitude *= 0.5;
+    frequency *= windParams.frequencyMultiplier;
+  }
+
+  return value / maxValue;
+}
+
+void main() {
+  uvec2 idxy = gl_GlobalInvocationID.xy;
+
+  if (idxy.x >= 4096 || idxy.y >= 4096) return;
+  vec2 st = vec2(idxy) / 4096.0;
+
+  vec2 offset = vec2(cos(windParams.time * 2.0), sin(windParams.time * 2.0)) * 0.5;
+  st += offset;
+
+  float noiseX = fbm(st * windParams.scale);
+  float noiseY = fbm((st + vec2(100.0, 100.0)) * windParams.scale);
+
+  vec2 windDir = normalize(vec2(noiseX - 0.5, noiseY - 0.5)) * 2.0; // [-1, 1]
+  imageStore(resultImage, ivec2(idxy), vec4(windDir, 0.0, 1.0));
+}
