@@ -1,0 +1,48 @@
+#version 460
+
+layout(local_size_x = 256) in;
+
+struct Particle {
+  vec4 positionLife; // xyz = position, w = life
+};
+
+layout(set = 0, binding = 0) buffer ParticleBuffer {
+  Particle particles[];
+};
+
+layout(push_constant) uniform PushConstants {
+  vec3 cameraPosition;
+  uint particleCount;
+  uint stage;
+  uint substage;
+} pc;
+
+float getDistance(uint index) {
+  vec3 pos = particles[index].positionLife.xyz;
+  return distance(pos, pc.cameraPosition);
+}
+
+void main() {
+  uint i = gl_GlobalInvocationID.x;
+
+  if (i >= pc.particleCount)
+    return;
+
+  uint ixj = i ^ pc.stage;
+
+  if (ixj > i) {
+    if (ixj < pc.particleCount)
+    {
+      float distI = getDistance(i);
+      float distJ = getDistance(ixj);
+
+      bool ascending = ((i & pc.substage) == 0);
+
+      if ((distI > distJ) == ascending) {
+        Particle temp = particles[i];
+        particles[i] = particles[ixj];
+        particles[ixj] = temp;
+      }
+    }
+  }
+}
