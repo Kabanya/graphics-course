@@ -237,9 +237,9 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(const tinygltf::Model&
       };
 
       result.relems.push_back(RenderElement{
-        .vertexOffset = static_cast<std::uint32_t>(result.vertices.size()),
-        .indexOffset = static_cast<std::uint32_t>(result.indices.size()),
-        .indexCount = static_cast<std::uint32_t>(accessors[0]->count),
+        .vertexOffset = static_cast<std::int32_t> (result.vertices.size()),
+        .indexOffset  = static_cast<std::uint32_t>(result.indices.size()),
+        .indexCount   = static_cast<std::uint32_t>(accessors[0]->count),
       });
 
       const std::size_t vertexCount = accessors[1]->count;
